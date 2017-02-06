@@ -53,7 +53,8 @@ namespace Massive
 			{
 				p.Size = valueAsString.Length > 4000 ? -1 : 4000;
 			}
-			// reset type and size from inferred values (if only implictly set, setting Value to DBNull.Value later on resets them)
+			// explicitly set type and size from inferred values
+			// (when only implictly set, setting Value to DBNull.Value later on resets them to String, 0)
 			p.DbType = p.DbType;
 			p.Size = p.Size;
 		}
