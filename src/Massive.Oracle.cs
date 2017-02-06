@@ -46,6 +46,10 @@ namespace Massive
 		/// </summary>
 		/// <param name="p">The parameter.</param>
 		/// <param name="value">The value to set.</param>
+		/// <remarks>
+		/// ArgumentException is thrown by Oracle and other ADO.NET providers if an unsupported DbType or Value is set
+		/// (e.g. Oracle does not natively support Guid (fixed below) nor Boolean types)
+		/// </remarks>
 		private static void SetValue(this DbParameter p, object value)
 		{
 			if(value is Guid)
@@ -53,21 +57,9 @@ namespace Massive
 				p.Value = value.ToString();
 				p.Size = 36;
 			}
-			else if(value is Boolean)
-			{
-				p.Value = (Byte)value;
-			}
 			else
 			{
-				try
-				{
-					p.Value = value;
-				}
-				catch (ArgumentException ex)
-				{
-					// Oracle is refusing some sensible parameter values; e.g. Boolean, Guid (both fixed above)
-					throw new InvalidOperationException("Parameter type " + value.GetType().ToString() + " was refused by the ADO.NET DB provider", ex);
-				}
+				p.Value = value;
 				var valueAsString = value as string;
 				if(valueAsString != null)
 				{
