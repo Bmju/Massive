@@ -133,7 +133,8 @@ namespace Massive
 			// if not ExpandoObject assume anonymous or plain-old class object, and extract parameter names, values and types from object properties
 			foreach(PropertyInfo property in args.GetType().GetProperties())
 			{
-				cmd.AddParam(property.GetValue(args), property.Name, direction, property.PropertyType);
+				// Extra null required for .NET backwards compatibility
+				cmd.AddParam(property.GetValue(args, null), property.Name, direction, property.PropertyType);
 			}
 		}
 
