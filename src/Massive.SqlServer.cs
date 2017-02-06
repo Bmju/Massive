@@ -206,6 +206,34 @@ namespace Massive
 
 
 		/// <summary>
+		/// Stored procedure support (SQL Server stored procedures always have a return value).
+		/// </summary>
+		/// <param name="procedureName"></param>
+		/// <param name="inParams"></param>
+		/// <param name="outParams"></param>
+		/// <param name="ioParams"></param>
+		/// <param name="returnParams">If null, default return value parameter named "RETURN" is provided. Use empty object to override.</param>
+		/// <returns></returns>
+		public virtual dynamic ExecuteProcedure(string procedureName, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null)
+		{
+			return Execute(procedureName, inParams, outParams, ioParams, returnParams ?? new { RETURN = 0 }, true);
+		}
+
+
+		/// <summary>
+		/// Function support.
+		/// </summary>
+		/// <param name="functionName"></param>
+		/// <param name="inParams"></param>
+		/// <param name="returnParams"></param>
+		/// <returns></returns>
+		public virtual dynamic ExecuteFunction(string functionName, object inParams = null, object returnParams = null)
+		{
+			return Execute(functionName, inParams, null, null, returnParams, true);
+		}
+
+
+		/// <summary>
 		/// Gets the name of the column using the expando object representing the column from the schema
 		/// </summary>
 		/// <param name="columnFromSchema">The column from schema in the form of an expando.</param>
