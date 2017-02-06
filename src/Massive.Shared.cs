@@ -67,8 +67,9 @@ namespace Massive
 		public static void AddParam(this DbCommand cmd, object value, string name = null, ParameterDirection direction = ParameterDirection.Input, Type type = null)
 		{
 			var p = cmd.CreateParameter();
-			// Prefixing DbParameter.ParameterName itself works in most cases on most databases, but fails for procedure/function parameters in Oracle.
-			// Not prefixing it always works.
+			// Adding prefix to DbParameter.ParameterName works in most cases on most databases
+			// but fails for procedure/function parameters in Oracle.
+			// Not prefixing always works (at least on current versions of all providers).
 			p.ParameterName = name ?? cmd.Parameters.Count.ToString();
 			p.Direction = direction;
 			if(value == null)
@@ -79,7 +80,7 @@ namespace Massive
 				}
 				else if(direction != ParameterDirection.Input)
 				{
-					throw new InvalidOperationException("All output, input-output and return parameters require a non-null value or a fully typed object property, so that the correct sql parameter type can be inferred");
+					throw new InvalidOperationException("Parameter \"" + p.ParameterName + "\" - all output, input-output and return parameters require non-null value or fully typed property, to allow the correct sql parameter type to be inferred");
 				}
 				p.Value = DBNull.Value;
 			}
