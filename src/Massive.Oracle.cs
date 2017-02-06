@@ -28,7 +28,6 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
 using System.Data.Common;
 using System.Dynamic;
@@ -43,34 +42,28 @@ namespace Massive
 	public static partial class ObjectExtensions
 	{
 		/// <summary>
-		/// Extension for adding single parameter. 
+		/// Extension to set value for single parameter, with any required corrections to the .NET inferred type
 		/// </summary>
 		/// <param name="cmd">The command to add the parameter to.</param>
 		/// <param name="value">The value to add as a parameter to the command.</param>
-		public static void AddParam(this DbCommand cmd, object value)
+		private static void SetValue(this DbParameter p, object value)
 		{
-			var p = cmd.CreateParameter();
-			p.ParameterName = string.Format(":{0}", cmd.Parameters.Count);
-			if(value == null)
+			if(value is Guid)
 			{
-				p.Value = DBNull.Value;
+				p.Value = value.ToString();
+				p.DbType = DbType.String;
+				p.Size = 36;
 			}
 			else
 			{
-				if(value is Guid)
-				{
-					p.Value = value.ToString();
-					p.DbType = DbType.String;
-					p.Size = 36;
-				}
-				else if(value is ExpandoObject)
-				{
-					var d = (IDictionary<string, object>)value;
-					p.Value = d.Values.FirstOrDefault();
-				}
-				else
+				try
 				{
 					p.Value = value;
+				}
+				catch (ArgumentException ex)
+				{
+					// Oracle non-managed provider (at least?) is refusing some sensible parameter values (e.g. boolean)
+					throw new InvalidOperationException("Parameter type " + value.GetType().ToString() + " was refused by the ADO.NET DB provider", ex);
 				}
 				var valueAsString = value as string;
 				if(valueAsString != null)
@@ -78,7 +71,6 @@ namespace Massive
 					p.Size = valueAsString.Length > 4000 ? -1 : 4000;
 				}
 			}
-			cmd.Parameters.Add(p);
 		}
 	}
 
@@ -260,6 +252,33 @@ namespace Massive
 		protected virtual string GetDeleteQueryPattern()
 		{
 			return "DELETE FROM {0} ";
+		}
+
+
+		/// <summary>
+		/// Stored procedure support (Oracle stored procedures do not support return values).
+		/// </summary>
+		/// <param name="procedureName"></param>
+		/// <param name="inParams"></param>
+		/// <param name="outParams"></param>
+		/// <param name="ioParams"></param>
+		/// <returns></returns>
+		public virtual dynamic ExecuteProcedure(string procedureName, object inParams = null, object outParams = null, object ioParams = null)
+		{
+			return Execute(procedureName, inParams, outParams, ioParams, null, true);
+		}
+
+
+		/// <summary>
+		/// Function support.
+		/// </summary>
+		/// <param name="functionName"></param>
+		/// <param name="inParams"></param>
+		/// <param name="returnParams"></param>
+		/// <returns></returns>
+		public virtual dynamic ExecuteFunction(string functionName, object inParams = null, object returnParams = null)
+		{
+			return Execute(functionName, inParams, null, null, returnParams, true);
 		}
 
 

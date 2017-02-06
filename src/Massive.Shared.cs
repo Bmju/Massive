@@ -34,6 +34,7 @@ using System.Data;
 using System.Data.Common;
 using System.Dynamic;
 using System.Linq;
+using System.Reflection;
 
 namespace Massive
 {
@@ -43,7 +44,62 @@ namespace Massive
 	public static partial class ObjectExtensions
 	{
 		/// <summary>
-		/// Extension method for adding in a bunch of parameters
+		/// Extension for adding single parameter.
+		/// </summary>
+		/// <param name="cmd">The command to add the parameter to.</param>
+		/// <param name="value">The value to add as a parameter to the command.</param>
+		/// <remarks>
+		/// This may not be required since it is compilation compatible subset of the next method.
+		/// </remarks>
+		public static void AddParam(this DbCommand cmd, object value)
+		{
+			cmd.AddParam(value, null);
+		}
+
+		/// <summary>
+		/// Extension for adding single parameter with optional support for parameter name, value and type.
+		/// </summary>
+		/// <param name="cmd">The command to add the parameter to.</param>
+		/// <param name="value">The value to add as a parameter to the command.</param>
+		/// <param name="name">The parameter name, auto-generated if omitted.</param>
+		/// <param name="direction">The parameter direction, input if omitted.</param>
+		/// <param name="type">Type from which to infer sql parameter type when value is null. Optional, but required if value is null and direction is not input.</param>
+		public static void AddParam(this DbCommand cmd, object value, string name = null, ParameterDirection direction = ParameterDirection.Input, Type type = null)
+		{
+			var p = cmd.CreateParameter();
+			// Prefixing DbParameter.ParameterName itself works in most cases on most databases, but fails for procedure/function parameters in Oracle.
+			// Not prefixing it always works.
+			p.ParameterName = name ?? cmd.Parameters.Count.ToString();
+			p.Direction = direction;
+			if(value == null)
+			{
+				if(type != null)
+				{
+					p.SetValue(type.CreateInstance());
+					// explicitly set type and size from .NET's inferred type and size;
+					// prevents p.Value = DBNull.Value from resetting these (on SQL Server; not required but harmless on Oracle)
+					p.DbType = p.DbType;
+					p.Size = p.Size;
+				}
+				else
+				{
+					if(direction != ParameterDirection.Input)
+					{
+						throw new InvalidOperationException("All output, input-output and return parameters require a non-null value or a fully typed object property, so that the correct sql parameter type can be inferred");
+					}
+				}
+				p.Value = DBNull.Value;
+			}
+			else
+			{
+				p.SetValue(value);
+			}
+			cmd.Parameters.Add(p);
+		}
+
+
+		/// <summary>
+		/// Extension method for adding a set of automatically named input parameters
 		/// </summary>
 		/// <param name="cmd">The command to add the parameters to.</param>
 		/// <param name="args">The parameter values to convert to parameters.</param>
@@ -57,6 +113,95 @@ namespace Massive
 			{
 				AddParam(cmd, item);
 			}
+		}
+
+
+		/// <summary>
+		/// Extension method for adding in a set of parameters with name, value and direction support
+		/// </summary>
+		/// <param name="cmd">The command to add the parameters to.</param>
+		/// <param name="args">The parameter name-value pairs.</param>
+		/// <param name="direction">The parameter direction.</param>
+		public static void AddParams(this DbCommand cmd, object args, ParameterDirection direction = ParameterDirection.Input)
+		{
+			if(args == null)
+			{
+				return;
+			}
+			// if ExpandoObject extract parameter names and values, and infer types from values
+			if(args is ExpandoObject)
+			{
+				foreach(var item in (IDictionary<string, object>)args)
+				{
+					cmd.AddParam(item.Value, item.Key, direction);
+				}
+				return;
+			}
+			// if not ExpandoObject assume anonymous or plain-old class object, and extract parameter names, values and types from object properties
+			foreach(PropertyInfo property in args.GetType().GetProperties())
+			{
+				cmd.AddParam(property.GetValue(args), property.Name, direction, property.PropertyType);
+			}
+		}
+
+
+		/// <summary>
+		/// Extension method to read back parameter return values after execution
+		/// </summary>
+		/// <param name="cmd">The command from which to read the parameter values.</param>
+		/// <param name="args">Object specifying the parameter names.</param>
+		/// <param name="results">Dictionary for the result object.</param>
+		public static void AddParamValuesToResult(this DbCommand cmd, object args, IDictionary<string, object> results)
+		{
+			if(args == null)
+			{
+				return;
+			}
+			// read back params specified by ExpandoObject
+			if(args is ExpandoObject)
+			{
+				foreach(var item in (IDictionary<string, object>)args)
+				{
+					string name = item.Key;
+					object value = cmd.Parameters[name].Value;
+					results.Add(name, value == DBNull.Value ? null : value);
+				}
+				return;
+			}
+			// read back params specified by anonymous or plain-old class object
+			foreach(PropertyInfo property in args.GetType().GetProperties())
+			{
+				string name = property.Name;
+				object value = cmd.Parameters[name].Value;
+				results.Add(name, value == DBNull.Value ? null : value);
+			}
+		}
+
+
+		/// <summary>
+		/// Create non-null instance of Type
+		/// </summary>
+		/// <param name="type">Input type.</param>
+		/// <returns>Non-null instance of type.</returns>
+		/// <remarks>
+		/// Supports all types listed in inferred type documentation https://msdn.microsoft.com/en-us/library/yy6y35y8(v=vs.110).aspx except byte[] and Object.
+		/// </remarks>
+		public static object CreateInstance(this Type type)
+		{
+			Type underlying = Nullable.GetUnderlyingType(type);
+			if(underlying != null)
+			{
+				return Activator.CreateInstance(underlying);
+			}
+			if(type.IsValueType)
+			{
+				return Activator.CreateInstance(type);
+			}
+			if(type == typeof(string))
+			{
+				return "";
+			}
+			throw new InvalidOperationException("CreateInstance does not yet support type " + type);
 		}
 
 
@@ -402,6 +547,34 @@ namespace Massive
 		public virtual int Execute(string sql, params object[] args)
 		{
 			return Execute(CreateCommand(sql, null, args));
+		}
+
+
+		/// <summary>
+		/// Execute procedure, function or sql with optional directional parameters.
+		/// For each set of parameters, you can pass in an Anonymous object, an ExpandoObject, a regular old POCO, or a NameValueCollection e.g. from a Request.Form or Request.QueryString.
+		/// </summary>
+		/// <param name="sql">Stored procedure name</param>
+		/// <param name="inParams">Input parameters (optional). Names and values are used.</param>
+		/// <param name="outParams">Output parameters (optional). Names are used. Values are used to determine parameter type.</param>
+		/// <param name="ioParams">Input-output parameters (optional). Names and values are used.</param>
+		/// <param name="returnParams">Return parameters (optional). Names are used. Values are used to determine parameter type.</param>
+		/// <param name="isProcedure">Whether to execute the command as a stored procedure.</param>
+		/// <param name="result">Dynamic holding return values of any output, input-output and return parameters.</param>
+		/// <remarks>
+		/// Does not process any result sets; where input parameters only are required the first result set may be read using DynamicModel.Query instead.
+		/// </remarks>
+		public dynamic Execute(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false)
+		{
+			DbCommand cmd = CreateCommand(sql, inParams, outParams, ioParams, returnParams, isProcedure);
+			dynamic result = new ExpandoObject();
+			// return value of this call not relevant when CommandType = StoredProcedure , as per documentation always returns -1 in that case
+			Execute(cmd);
+			var resultDictionary = (IDictionary<string, object>)result;
+			cmd.AddParamValuesToResult(outParams, resultDictionary);
+			cmd.AddParamValuesToResult(ioParams, resultDictionary);
+			cmd.AddParamValuesToResult(returnParams, resultDictionary);
+			return result;
 		}
 
 
@@ -1046,6 +1219,28 @@ namespace Massive
 				result.AddParams(args);
 			}
 			return result;
+		}
+
+
+		/// <summary>
+		/// Creates a new DbCommand from the sql statement specified, with support for parameter names and directions
+		/// </summary>
+		/// <param name="sql">sql to execute (typically just the Procedure or Function name, when isProcedure=true)</param>
+		/// <param name="inParams">Object containing input parameter name:value pairs</param>
+		/// <param name="outParams">Object containing output parameter name:value pairs</param>
+		/// <param name="ioParams">Object containing input-output parameter name:value pairs</param>
+		/// <param name="returnParams">Object containing return parameter name:value pairs</param>
+		/// <param name="isProcedure">Whether to execute the command as a procedure.</param>
+		/// <returns>Ready to use DbCommand</returns>
+		private DbCommand CreateCommand(string sql, object inParams, object outParams, object ioParams, object returnParams, bool isProcedure)
+		{
+			DbCommand cmd = CreateCommand(sql, null);
+			if(isProcedure) cmd.CommandType = CommandType.StoredProcedure;
+			cmd.AddParams(inParams);
+			cmd.AddParams(outParams, ParameterDirection.Output);
+			cmd.AddParams(ioParams, ParameterDirection.InputOutput);
+			cmd.AddParams(returnParams, ParameterDirection.ReturnValue);
+			return cmd;
 		}
 
 
