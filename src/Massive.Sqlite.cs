@@ -40,44 +40,26 @@ namespace Massive
 	public static partial class ObjectExtensions
     {
 		/// <summary>
-		/// Extension for adding single parameter. 
+		/// Extension to set value for single parameter, with any required corrections to the .NET inferred type
 		/// </summary>
-		/// <param name="cmd">The command to add the parameter to.</param>
-		/// <param name="value">The value to add as a parameter to the command.</param>
-		public static void AddParam(this DbCommand cmd, object value)
+		/// <param name="p">The parameter.</param>
+		/// <param name="value">The value to set.</param>
+		private static void SetValue(this DbParameter p, object value)
 		{
-			var p = cmd.CreateParameter();
-			p.ParameterName = string.Format("@{0}", cmd.Parameters.Count);
-			if(value == null)
+			p.Value = value;
+			var valueAsString = value as string;
+			if(valueAsString != null)
 			{
-				p.Value = DBNull.Value;
+				p.Size = valueAsString.Length > 4000 ? -1 : 4000;
 			}
-			else
-			{
-				var o = value as ExpandoObject;
-				if(o == null)
-				{
-					p.Value = value;
-					var s = value as string;
-					if(s != null)
-					{
-						p.Size = s.Length > 4000 ? -1 : 4000;
-					}
-				}
-				else
-				{
-					p.Value = ((IDictionary<string, object>)value).Values.FirstOrDefault();
-				}
-			}
-			cmd.Parameters.Add(p);
 		}
 	}
-	
 
-    /// <summary>
-    /// A class that wraps your database table in Dynamic Funtime
-    /// </summary>
-    public partial class DynamicModel
+
+	/// <summary>
+	/// A class that wraps your database table in Dynamic Funtime
+	/// </summary>
+	public partial class DynamicModel
     {
 		#region Constants
 		// Mandatory constants every DB has to define. 

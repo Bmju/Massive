@@ -44,15 +44,18 @@ namespace Massive
 		/// <summary>
 		/// Extension to set value for single parameter, with any required corrections to the .NET inferred type
 		/// </summary>
-		/// <param name="cmd">The command to add the parameter to.</param>
-		/// <param name="value">The value to add as a parameter to the command.</param>
+		/// <param name="p">The parameter.</param>
+		/// <param name="value">The value to set.</param>
 		private static void SetValue(this DbParameter p, object value)
 		{
 			if(value is Guid)
 			{
 				p.Value = value.ToString();
-				p.DbType = DbType.String;
 				p.Size = 36;
+			}
+			else if(value is Boolean)
+			{
+				p.Value = (Byte)value;
 			}
 			else
 			{
@@ -62,7 +65,7 @@ namespace Massive
 				}
 				catch (ArgumentException ex)
 				{
-					// Oracle non-managed provider (at least?) is refusing some sensible parameter values (e.g. boolean)
+					// Oracle is refusing some sensible parameter values; e.g. Boolean, Guid (both fixed above)
 					throw new InvalidOperationException("Parameter type " + value.GetType().ToString() + " was refused by the ADO.NET DB provider", ex);
 				}
 				var valueAsString = value as string;

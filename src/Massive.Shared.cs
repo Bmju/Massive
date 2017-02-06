@@ -76,17 +76,10 @@ namespace Massive
 				if(type != null)
 				{
 					p.SetValue(type.CreateInstance());
-					// explicitly set type and size from .NET's inferred type and size;
-					// prevents p.Value = DBNull.Value from resetting these (on SQL Server; not required but harmless on Oracle)
-					p.DbType = p.DbType;
-					p.Size = p.Size;
 				}
-				else
+				else if(direction != ParameterDirection.Input)
 				{
-					if(direction != ParameterDirection.Input)
-					{
-						throw new InvalidOperationException("All output, input-output and return parameters require a non-null value or a fully typed object property, so that the correct sql parameter type can be inferred");
-					}
+					throw new InvalidOperationException("All output, input-output and return parameters require a non-null value or a fully typed object property, so that the correct sql parameter type can be inferred");
 				}
 				p.Value = DBNull.Value;
 			}

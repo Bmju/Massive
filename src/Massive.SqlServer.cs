@@ -43,8 +43,8 @@ namespace Massive
 		/// <summary>
 		/// Extension to set value for single parameter, with any required corrections to the .NET inferred type
 		/// </summary>
-		/// <param name="cmd">The command to add the parameter to.</param>
-		/// <param name="value">The value to add as a parameter to the command.</param>
+		/// <param name="p">The parameter.</param>
+		/// <param name="value">The value to set.</param>
 		private static void SetValue(this DbParameter p, object value)
 		{
 			p.Value = value;
@@ -53,6 +53,9 @@ namespace Massive
 			{
 				p.Size = valueAsString.Length > 4000 ? -1 : 4000;
 			}
+			// reset type and size from inferred values (if only implictly set, setting Value to DBNull.Value later on resets them)
+			p.DbType = p.DbType;
+			p.Size = p.Size;
 		}
 	}
 
