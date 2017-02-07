@@ -40,6 +40,15 @@ namespace Massive
 	public static partial class ObjectExtensions
     {
 		/// <summary>
+		/// Flag to signal whether anonymous parameters are supported
+		/// </summary>
+		private static bool _supportsAnonymousParameters(this DbParameter p)
+		{
+			return false;
+		}
+
+
+		/// <summary>
 		/// Extension to set value for single parameter, with any required corrections to the .NET inferred type
 		/// </summary>
 		/// <param name="p">The parameter.</param>

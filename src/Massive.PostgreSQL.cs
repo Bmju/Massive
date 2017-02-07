@@ -41,6 +41,15 @@ namespace Massive
     public static partial class ObjectExtensions
 	{
 		/// <summary>
+		/// Flag to signal whether anonymous parameters are supported
+		/// </summary>
+		private static bool _supportsAnonymousParameters(this DbParameter p)
+		{
+			return true;
+		}
+
+
+		/// <summary>
 		/// Extension to set value for single parameter, with any required corrections to the .NET inferred type
 		/// </summary>
 		/// <param name="p">The parameter.</param>
@@ -61,6 +70,12 @@ namespace Massive
 				{
 					p.Size = valueAsString.Length > 4000 ? -1 : 4000;
 				}
+			}
+			// PostgreSQL specific fix (return value params are always empty, but return values can be found in output params of the same name)
+			// This is the WRONG PLACE for this fix (it will not happen in all cases), it needs a per-DB callback instead, I guess for SetDirection().
+			if (p.Direction == ParameterDirection.ReturnValue)
+			{
+				p.Direction = ParameterDirection.Output;
 			}
 		}
 	}
@@ -234,7 +249,7 @@ namespace Massive
 		/// <param name="inParams"></param>
 		/// <param name="outParams"></param>
 		/// <param name="ioParams"></param>
-		/// <param name="returnParams"></param>
+		/// <param name="returnParams">These seem not to be used - return and out params all in out.</param>
 		/// <returns></returns>
 		public virtual dynamic ExecuteFunction(string functionName, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null)
 		{

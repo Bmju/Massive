@@ -67,9 +67,13 @@ namespace Massive
 		public static void AddParam(this DbCommand cmd, object value, string name = null, ParameterDirection direction = ParameterDirection.Input, Type type = null)
 		{
 			var p = cmd.CreateParameter();
+			if (name == "" && !p._supportsAnonymousParameters())
+			{
+				throw new InvalidOperationException("Current ADO.NET provider does not support anonymous parameters from object[]");
+			}
 			// Adding prefix to DbParameter.ParameterName works in most cases on most databases
 			// but fails for procedure/function parameters in Oracle.
-			// Not prefixing always works (at least on current versions of all providers).
+			// Not prefixing always works (at least on latest versions of all providers?).
 			p.ParameterName = name ?? cmd.Parameters.Count.ToString();
 			p.Direction = direction;
 			if(value == null)
@@ -111,10 +115,11 @@ namespace Massive
 
 
 		/// <summary>
-		/// Extension method for adding in a set of parameters with name, value and direction support
+		/// Extension method for adding in a set of parameters with name, value and direction support.
+		/// args can be of type object[], ExpandoObject, NameValueCollection (or subclass), anonymous type or POCO.
 		/// </summary>
 		/// <param name="cmd">The command to add the parameters to.</param>
-		/// <param name="args">The parameter name-value pairs.</param>
+		/// <param name="args">Parameter names, values and types.</param>
 		/// <param name="direction">The parameter direction.</param>
 		public static void AddParams(this DbCommand cmd, object args, ParameterDirection direction = ParameterDirection.Input)
 		{
@@ -122,7 +127,18 @@ namespace Massive
 			{
 				return;
 			}
-			// if ExpandoObject extract parameter names and values, and infer types from values
+
+			object[] argsArray = args as object[];
+			if(argsArray != null)
+			{
+				// anonymous parameters from array
+				foreach(var value in argsArray)
+				{
+					AddParam(cmd, value, "");
+				}
+				return;
+			}
+
 			if(args is ExpandoObject)
 			{
 				foreach(var item in (IDictionary<string, object>)args)
@@ -131,10 +147,21 @@ namespace Massive
 				}
 				return;
 			}
-			// if not ExpandoObject assume anonymous or plain-old class object, and extract parameter names, values and types from object properties
+
+			if(args.GetType() == typeof(NameValueCollection) || args.GetType().IsSubclassOf(typeof(NameValueCollection)))
+			{
+				var argsCollection = (NameValueCollection)args;
+				foreach (string name in argsCollection)
+				{
+					cmd.AddParam(argsCollection[name], name);
+				}
+				return;
+			}
+
+			// names, values and types from properties of anonymous object or POCO
 			foreach(PropertyInfo property in args.GetType().GetProperties())
 			{
-				// Extra null required for .NET backwards compatibility
+				// Extra null in GetValue() required for .NET backwards compatibility
 				cmd.AddParam(property.GetValue(args, null), property.Name, direction, property.PropertyType);
 			}
 		}
@@ -152,7 +179,13 @@ namespace Massive
 			{
 				return;
 			}
-			// read back params specified by ExpandoObject
+
+			object[] argsArray = args as object[];
+			if(argsArray != null)
+			{
+				throw new InvalidOperationException("object[] arguments supported for input parameters only");
+			}
+
 			if(args is ExpandoObject)
 			{
 				foreach(var item in (IDictionary<string, object>)args)
@@ -163,7 +196,18 @@ namespace Massive
 				}
 				return;
 			}
-			// read back params specified by anonymous or plain-old class object
+
+			if(args.GetType() == typeof(NameValueCollection) || args.GetType().IsSubclassOf(typeof(NameValueCollection)))
+			{
+				var argsCollection = (NameValueCollection)args;
+				foreach(string name in argsCollection)
+				{
+					object value = cmd.Parameters[name].Value;
+					results.Add(name, value == DBNull.Value ? null : value);
+				}
+			}
+
+			// read back values specified by anonymous object or POCO
 			foreach(PropertyInfo property in args.GetType().GetProperties())
 			{
 				string name = property.Name;
@@ -179,7 +223,11 @@ namespace Massive
 		/// <param name="type">Input type.</param>
 		/// <returns>Non-null instance of type.</returns>
 		/// <remarks>
-		/// Supports all types listed in inferred type documentation https://msdn.microsoft.com/en-us/library/yy6y35y8(v=vs.110).aspx except byte[] and Object.
+		/// Supports all the types listed in ADO.NET type inference documentation https://msdn.microsoft.com/en-us/library/yy6y35y8(v=vs.110).aspx , except for byte[] and Object.
+		/// Although this method supports all these types, the various ADO.NET providers do not!
+		/// None of the providers support DbType.UInt16/32/64, and Oracle and Postgres do not support DbType.Guid or DbType.Boolean.
+		/// Setting DbParameter DbType or Value to one of these non-supported types will produce an ArgumentException (straight away on Postgres and Oracle, at execute time on SQL Server).
+		/// The per-DB method DbParameter.SetValue is the place to add code to convert these non-supported types to supported types.
 		/// </remarks>
 		public static object CreateInstance(this Type type)
 		{
