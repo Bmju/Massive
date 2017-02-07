@@ -211,7 +211,36 @@ namespace Massive
 		{
 			return "DELETE FROM {0} ";
 		}
-		
+
+
+		/// <summary>
+		/// Procedure support (PostgreSQL procedures are just functions with no return value).
+		/// </summary>
+		/// <param name="functionName"></param>
+		/// <param name="inParams"></param>
+		/// <param name="outParams"></param>
+		/// <param name="ioParams"></param>
+		/// <returns></returns>
+		public virtual dynamic ExecuteProcedure(string functionName, object inParams = null, object outParams = null, object ioParams = null)
+		{
+			return Execute(functionName, inParams, outParams, ioParams, null, true);
+		}
+
+
+		/// <summary>
+		/// Function support.
+		/// </summary>
+		/// <param name="functionName"></param>
+		/// <param name="inParams"></param>
+		/// <param name="outParams"></param>
+		/// <param name="ioParams"></param>
+		/// <param name="returnParams"></param>
+		/// <returns></returns>
+		public virtual dynamic ExecuteFunction(string functionName, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null)
+		{
+			return Execute(functionName, inParams, outParams, ioParams, returnParams, true);
+		}
+
 
 		/// <summary>
 		/// Gets the name of the column using the expando object representing the column from the schema
