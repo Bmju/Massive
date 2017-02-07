@@ -216,7 +216,7 @@ namespace Massive
 		/// <param name="inParams"></param>
 		/// <param name="outParams"></param>
 		/// <param name="ioParams"></param>
-		/// <param name="returnParams">If null, default return value parameter named "RETURN" is provided. Use empty object to override.</param>
+		/// <param name="returnParams">If null, integer return value parameter named "RETURN" is added.</param>
 		/// <returns></returns>
 		public virtual dynamic ExecuteProcedure(string procedureName, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null)
 		{
