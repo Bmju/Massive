@@ -45,7 +45,7 @@ namespace Massive
 		/// </summary>
 		private static bool SetAnonymousParameter(this DbParameter p)
 		{
-            // pretty simple! but assume more could in principle be needed in some other provider
+            // pretty simple! but assume in principle more could be needed in some other provider
             p.ParameterName = "";
 			return true;
 		}
