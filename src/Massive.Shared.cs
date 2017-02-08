@@ -157,7 +157,7 @@ namespace Massive
 			if(args.GetType() == typeof(NameValueCollection) || args.GetType().IsSubclassOf(typeof(NameValueCollection)))
 			{
 				var argsCollection = (NameValueCollection)args;
-				foreach (string name in argsCollection)
+				foreach(string name in argsCollection)
 				{
 					cmd.AddParam(argsCollection[name], name);
 				}
