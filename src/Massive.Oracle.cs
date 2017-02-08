@@ -62,7 +62,7 @@ namespace Massive
 
 
 		/// <summary>
-		/// Extension to set Value (and implicitly DbType) for single parameter, but adding support for unsupported types where possible.
+		/// Extension to set Value (and implicitly DbType) for single parameter, adding support for provider unsupported types, etc.
 		/// </summary>
 		/// <param name="p">The parameter.</param>
 		/// <param name="value">The value to set.</param>
