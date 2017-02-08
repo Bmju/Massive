@@ -44,21 +44,28 @@ namespace Massive
 		/// <summary>
 		/// Flag to signal whether anonymous parameters are supported
 		/// </summary>
-		private static bool _supportsAnonymousParameters(this DbParameter p)
+		private static bool SetAnonymousParameter(this DbParameter p)
 		{
 			return false;
 		}
 
 
 		/// <summary>
-		/// Extension to set value for single parameter, with any required corrections to the .NET inferred type
+		/// Extension to set ParameterDirection for single parameter, correcting for unexpected handling in specific ADO.NET providers.
 		/// </summary>
 		/// <param name="p">The parameter.</param>
 		/// <param name="value">The value to set.</param>
-		/// <remarks>
-		/// ArgumentException is thrown by Oracle and other ADO.NET providers if an unsupported DbType or Value is set
-		/// (e.g. Oracle does not natively support Guid (fixed below) nor Boolean types)
-		/// </remarks>
+		private static void SetDirection(this DbParameter p, ParameterDirection direction)
+		{
+			p.Direction = direction;
+		}
+
+
+		/// <summary>
+		/// Extension to set Value (and implicitly DbType) for single parameter, but adding support for unsupported types where possible.
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <param name="value">The value to set.</param>
 		private static void SetValue(this DbParameter p, object value)
 		{
 			if(value is Guid)

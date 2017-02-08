@@ -67,15 +67,21 @@ namespace Massive
 		public static void AddParam(this DbCommand cmd, object value, string name = null, ParameterDirection direction = ParameterDirection.Input, Type type = null)
 		{
 			var p = cmd.CreateParameter();
-			if (name == "" && !p._supportsAnonymousParameters())
+			if(name == "")
 			{
-				throw new InvalidOperationException("Current ADO.NET provider does not support anonymous parameters from object[]");
+				if(!p.SetAnonymousParameter())
+				{
+					throw new InvalidOperationException("Current ADO.NET provider does not support anonymous parameters");
+				}
 			}
-			// Adding prefix to DbParameter.ParameterName works in most cases on most databases
-			// but fails for procedure/function parameters in Oracle.
-			// Not prefixing always works (at least on latest versions of all providers?).
-			p.ParameterName = name ?? cmd.Parameters.Count.ToString();
-			p.Direction = direction;
+			else
+			{
+				// Adding the : or @ prefix to DbParameter.ParameterName itself works in most cases on most databases,
+				// but it fails to bind for procedure/function parameter names in Oracle.
+				// On the other hand not prefixing here always works, on the current versions of all currently supported providers...
+				p.ParameterName = name ?? cmd.Parameters.Count.ToString();
+			}
+			p.SetDirection(direction);
 			if(value == null)
 			{
 				if(type != null)

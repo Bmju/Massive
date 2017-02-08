@@ -43,13 +43,28 @@ namespace Massive
 		/// <summary>
 		/// Flag to signal whether anonymous parameters are supported
 		/// </summary>
-		private static bool _supportsAnonymousParameters(this DbParameter p)
+		private static bool SetAnonymousParameter(this DbParameter p)
 		{
+            // pretty simple! but assume more could in principle be needed in some other provider
+            p.ParameterName = "";
 			return true;
 		}
 
 
 		/// <summary>
+		/// Extension to set ParameterDirection for single parameter, correcting for unexpected handling in specific ADO.NET providers.
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <param name="value">The value to set.</param>
+		private static void SetDirection(this DbParameter p, ParameterDirection direction)
+		{
+			// Postgres/Npgsql specific fix: return params are always returned unchanged, return values are accessed using output params
+			p.Direction = (direction == ParameterDirection.ReturnValue) ? ParameterDirection.Output : direction;
+		}
+
+
+		/// <summary>
+		/// Extension to set Value (and implicitly DbType) for single parameter, but adding support for unsupported types where possible.
 		/// Extension to set value for single parameter, with any required corrections to the .NET inferred type
 		/// </summary>
 		/// <param name="p">The parameter.</param>
@@ -70,12 +85,6 @@ namespace Massive
 				{
 					p.Size = valueAsString.Length > 4000 ? -1 : 4000;
 				}
-			}
-			// PostgreSQL specific fix (return value params are always empty, but return values can be found in output params of the same name)
-			// This is the WRONG PLACE for this fix (it will not happen in all cases), it needs a per-DB callback instead, I guess for SetDirection().
-			if (p.Direction == ParameterDirection.ReturnValue)
-			{
-				p.Direction = ParameterDirection.Output;
 			}
 		}
 	}

@@ -43,14 +43,25 @@ namespace Massive
 		/// <summary>
 		/// Flag to signal whether anonymous parameters are supported
 		/// </summary>
-		private static bool _supportsAnonymousParameters(this DbParameter p)
+		private static bool SetAnonymousParameter(this DbParameter p)
 		{
 			return false;
 		}
 
 
 		/// <summary>
-		/// Extension to set value for single parameter, with any required corrections to the .NET inferred type
+		/// Extension to set ParameterDirection for single parameter, correcting for unexpected handling in specific ADO.NET providers.
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <param name="value">The value to set.</param>
+		private static void SetDirection(this DbParameter p, ParameterDirection direction)
+		{
+			p.Direction = direction;
+		}
+
+
+		/// <summary>
+		/// Extension to set Value (and implicitly DbType) for single parameter, but adding support for unsupported types where possible.
 		/// </summary>
 		/// <param name="p">The parameter.</param>
 		/// <param name="value">The value to set.</param>
@@ -62,8 +73,8 @@ namespace Massive
 			{
 				p.Size = valueAsString.Length > 4000 ? -1 : 4000;
 			}
-			// explicitly set type and size from inferred values
-			// (when only implictly set, setting Value to DBNull.Value later on resets them to String, 0)
+			// explicitly set type and size to the already implicitly set values
+			// (when only implictly set, setting Value to DBNull.Value causes them to reset String & 0)
 			p.DbType = p.DbType;
 			p.Size = p.Size;
 		}
