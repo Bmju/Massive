@@ -239,26 +239,28 @@ namespace Massive
 
 		/// <summary>
 		/// Procedure support (PostgreSQL procedures are just functions with no return value).
+		/// For each set of parameters, you can pass in an Anonymous object, an ExpandoObject, a regular old POCO, or a NameValueCollection e.g. from a Request.Form or Request.QueryString.
 		/// </summary>
-		/// <param name="functionName"></param>
-		/// <param name="inParams"></param>
-		/// <param name="outParams"></param>
-		/// <param name="ioParams"></param>
+		/// <param name="procedureName">The procedure name.</param>
+		/// <param name="inParams">The input parameter collection. Additionally accepts object[] for anonymous parameter support.</param>
+		/// <param name="outParams">The output parameter collection.</param>
+		/// <param name="ioParams">The input-output parameter collection.</param>
 		/// <returns></returns>
-		public virtual dynamic ExecuteProcedure(string functionName, object inParams = null, object outParams = null, object ioParams = null)
+		public virtual dynamic ExecuteProcedure(string procedureName, object inParams = null, object outParams = null, object ioParams = null)
 		{
-			return Execute(functionName, inParams, outParams, ioParams, null, true);
+			return Execute(procedureName, inParams, outParams, ioParams, null, true);
 		}
 
 
 		/// <summary>
 		/// Function support.
+		/// For each set of parameters, you can pass in an Anonymous object, an ExpandoObject, a regular old POCO, or a NameValueCollection e.g. from a Request.Form or Request.QueryString.
 		/// </summary>
-		/// <param name="functionName"></param>
-		/// <param name="inParams"></param>
-		/// <param name="outParams"></param>
-		/// <param name="ioParams"></param>
-		/// <param name="returnParams">These seem not to be used - return and out params all in out.</param>
+		/// <param name="functionName">The function name.</param>
+		/// <param name="inParams">The input parameter collection. Additionally accepts object[] for anonymous parameter support.</param>
+		/// <param name="outParams">The output parameter collection.</param>
+		/// <param name="ioParams">The input-output parameter collection.</param>
+		/// <param name="returnParams">The return value collection.</param>
 		/// <returns></returns>
 		public virtual dynamic ExecuteFunction(string functionName, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null)
 		{

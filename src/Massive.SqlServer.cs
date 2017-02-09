@@ -232,12 +232,13 @@ namespace Massive
 
 
 		/// <summary>
-		/// Stored procedure support (SQL Server stored procedures always have a return value).
+		/// Stored procedure support (SQL Server stored procedures always return a single integer value).
+		/// For each set of parameters, you can pass in an Anonymous object, an ExpandoObject, a regular old POCO, or a NameValueCollection e.g. from a Request.Form or Request.QueryString.
 		/// </summary>
-		/// <param name="procedureName"></param>
-		/// <param name="inParams"></param>
-		/// <param name="outParams"></param>
-		/// <param name="ioParams"></param>
+		/// <param name="procedureName">The procedure name.</param>
+		/// <param name="inParams">The input parameter collection.</param>
+		/// <param name="outParams">The output parameter collection.</param>
+		/// <param name="ioParams">The input-output parameter collection.</param>
 		/// <param name="returnParams">If null, integer return value parameter named "RETURN" is added.</param>
 		/// <returns></returns>
 		public virtual dynamic ExecuteProcedure(string procedureName, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null)
@@ -248,10 +249,11 @@ namespace Massive
 
 		/// <summary>
 		/// Function support.
+		/// For each set of parameters, you can pass in an Anonymous object, an ExpandoObject, a regular old POCO, or a NameValueCollection e.g. from a Request.Form or Request.QueryString.
 		/// </summary>
-		/// <param name="functionName"></param>
-		/// <param name="inParams"></param>
-		/// <param name="returnParams"></param>
+		/// <param name="functionName">The function name.</param>
+		/// <param name="inParams">The input parameter collection.</param>
+		/// <param name="returnParams">The return parameter collection.</param>
 		/// <returns></returns>
 		public virtual dynamic ExecuteFunction(string functionName, object inParams = null, object returnParams = null)
 		{
