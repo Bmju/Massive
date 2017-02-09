@@ -42,8 +42,10 @@ namespace Massive
 	public static partial class ObjectExtensions
 	{
 		/// <summary>
-		/// Flag to signal whether anonymous parameters are supported
+		/// Extension to set anonymous DbParameter
 		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <returns>Returns false if not supported on this provider.</returns>
 		private static bool SetAnonymousParameter(this DbParameter p)
 		{
 			return false;
@@ -54,7 +56,7 @@ namespace Massive
 		/// Extension to set ParameterDirection for single parameter, correcting for unexpected handling in specific ADO.NET providers.
 		/// </summary>
 		/// <param name="p">The parameter.</param>
-		/// <param name="value">The value to set.</param>
+		/// <param name="direction">The direction to set.</param>
 		private static void SetDirection(this DbParameter p, ParameterDirection direction)
 		{
 			p.Direction = direction;
@@ -65,7 +67,7 @@ namespace Massive
 		/// Extension to set Value (and implicitly DbType) for single parameter, adding support for provider unsupported types, etc.
 		/// </summary>
 		/// <param name="p">The parameter.</param>
-		/// <param name="value">The value to set.</param>
+		/// <param name="value">The non-null value to set. Nulls are handled in the shared code.</param>
 		private static void SetValue(this DbParameter p, object value)
 		{
 			if(value is Guid)

@@ -67,7 +67,7 @@ namespace Massive
 		public static void AddParam(this DbCommand cmd, object value, string name = null, ParameterDirection direction = ParameterDirection.Input, Type type = null)
 		{
 			var p = cmd.CreateParameter();
-			if(name == "")
+			if(name == string.Empty)
 			{
 				if(!p.SetAnonymousParameter())
 				{
@@ -76,9 +76,9 @@ namespace Massive
 			}
 			else
 			{
-				// Adding the : or @ prefix to DbParameter.ParameterName itself works in most cases on most databases,
-				// but it fails to bind for procedure/function parameter names in Oracle.
-				// On the other hand not prefixing here always works, on the current versions of all currently supported providers...
+				// Adding the : or @ prefix to DbParameter.ParameterName works in most cases on most databases, but
+				// fails to bind for procedure/function parameter names in Oracle.
+				// Not prefixing here always works, on the current versions of all currently supported providers...
 				p.ParameterName = name ?? cmd.Parameters.Count.ToString();
 			}
 			p.SetDirection(direction);
@@ -140,7 +140,7 @@ namespace Massive
 				// anonymous parameters from array
 				foreach(var value in argsArray)
 				{
-					AddParam(cmd, value, "");
+					AddParam(cmd, value, string.Empty);
 				}
 				return;
 			}
@@ -600,7 +600,7 @@ namespace Massive
 
 
 		/// <summary>
-		/// Execute procedure, function or sql with optional directional parameters.
+		/// Execute procedure, function or specified SQL with optional directional parameters.
 		/// For each set of parameters, you can pass in an Anonymous object, an ExpandoObject, a regular old POCO, or a NameValueCollection e.g. from a Request.Form or Request.QueryString.
 		/// </summary>
 		/// <param name="sql">Stored procedure name</param>
