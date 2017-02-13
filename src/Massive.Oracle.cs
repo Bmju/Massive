@@ -59,7 +59,7 @@ namespace Massive
 		/// <returns>Return true if output types should be enforced.</returns>
 		private static bool EnforceOutputTypes(this DbParameter p)
 		{
-			return false;
+			return true;
 		}
 
 
