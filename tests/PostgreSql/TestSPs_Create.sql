@@ -117,3 +117,16 @@ $BODY$
   COST 100;
 ALTER FUNCTION public.test_vars(integer)
   OWNER TO postgres;
+
+--
+
+CREATE TABLE tab (y int);
+INSERT INTO tab VALUES (1), (3), (5), (7);
+
+CREATE FUNCTION sum_n_product_with_tab (x int, OUT sum int, OUT product int)
+RETURNS SETOF record
+AS $$
+    SELECT $1 + tab.y, $1 * tab.y FROM tab;
+$$ LANGUAGE SQL;
+
+SELECT * FROM sum_n_product_with_tab(10);
