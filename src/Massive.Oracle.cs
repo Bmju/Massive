@@ -53,6 +53,17 @@ namespace Massive
 
 
 		/// <summary>
+		/// Extension to check whether ADO.NET provider notices output parameter types (no point requiring user to provide them when it doesn't)
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <returns>Return true if output types should be enforced.</returns>
+		private static bool EnforceOutputTypes(this DbParameter p)
+		{
+			return false;
+		}
+
+
+		/// <summary>
 		/// Extension to set ParameterDirection for single parameter, correcting for unexpected handling in specific ADO.NET providers.
 		/// </summary>
 		/// <param name="p">The parameter.</param>
@@ -67,7 +78,7 @@ namespace Massive
 		/// Extension to set Value (and implicitly DbType) for single parameter, adding support for provider unsupported types, etc.
 		/// </summary>
 		/// <param name="p">The parameter.</param>
-		/// <param name="value">The non-null value to set. Nulls are handled in the shared code.</param>
+		/// <param name="value">The non-null value to set. Nulls are handled in shared code.</param>
 		private static void SetValue(this DbParameter p, object value)
 		{
 			if(value is Guid)
@@ -265,35 +276,6 @@ namespace Massive
 		protected virtual string GetDeleteQueryPattern()
 		{
 			return "DELETE FROM {0} ";
-		}
-
-
-		/// <summary>
-		/// Stored procedure support (Oracle stored procedures do not support return values).
-		/// For each set of parameters, you can pass in an Anonymous object, an ExpandoObject, a regular old POCO, or a NameValueCollection e.g. from a Request.Form or Request.QueryString.
-		/// </summary>
-		/// <param name="procedureName">The procedure name.</param>
-		/// <param name="inParams">The input parameter collection.</param>
-		/// <param name="outParams">The output parameter collection.</param>
-		/// <param name="ioParams">The input-output parameter collection.</param>
-		/// <returns></returns>
-		public virtual dynamic ExecuteProcedure(string procedureName, object inParams = null, object outParams = null, object ioParams = null)
-		{
-			return Execute(procedureName, inParams, outParams, ioParams, null, true);
-		}
-
-
-		/// <summary>
-		/// Function support.
-		/// For each set of parameters, you can pass in an Anonymous object, an ExpandoObject, a regular old POCO, or a NameValueCollection e.g. from a Request.Form or Request.QueryString.
-		/// </summary>
-		/// <param name="functionName">The function name.</param>
-		/// <param name="inParams">The input parameter collection.</param>
-		/// <param name="returnParams">The return parameter collection.</param>
-		/// <returns></returns>
-		public virtual dynamic ExecuteFunction(string functionName, object inParams = null, object returnParams = null)
-		{
-			return Execute(functionName, inParams, null, null, returnParams, true);
 		}
 
 

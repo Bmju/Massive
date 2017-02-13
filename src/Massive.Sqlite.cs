@@ -52,6 +52,17 @@ namespace Massive
 
 
 		/// <summary>
+		/// Extension to check whether ADO.NET provider notices output parameter types (no point requiring user to provide them when it doesn't)
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <returns>Return true if output types should be enforced.</returns>
+		private static bool EnforceOutputTypes(this DbParameter p)
+		{
+			return true;
+		}
+
+
+		/// <summary>
 		/// Extension to set ParameterDirection for single parameter, correcting for unexpected handling in specific ADO.NET providers.
 		/// </summary>
 		/// <param name="p">The parameter.</param>
@@ -66,7 +77,7 @@ namespace Massive
 		/// Extension to set Value (and implicitly DbType) for single parameter, adding support for provider unsupported types, etc.
 		/// </summary>
 		/// <param name="p">The parameter.</param>
-		/// <param name="value">The non-null value to set. Nulls are handled in the shared code.</param>
+		/// <param name="value">The non-null value to set. Nulls are handled in shared code.</param>
 		private static void SetValue(this DbParameter p, object value)
 		{
 			p.Value = value;
