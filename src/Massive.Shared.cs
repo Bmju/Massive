@@ -317,8 +317,9 @@ namespace Massive
 		/// <param name="enumStringValue">The string name of the enum value to set.</param>
 		public static void SetRuntimeEnumProperty(this object o, string enumPropertyName, string enumStringValue)
 		{
-			PropertyInfo pinfoEnumProperty = o.GetType().GetRuntimeProperty(enumPropertyName);
-			pinfoEnumProperty.SetValue(o, Enum.Parse(pinfoEnumProperty.PropertyType, enumStringValue));
+			// Both these lines can be simpler in .NET 4.5
+			PropertyInfo pinfoEnumProperty = o.GetType().GetProperties().Where(property => property.Name == enumPropertyName).FirstOrDefault();
+			pinfoEnumProperty.SetValue(o, Enum.Parse(pinfoEnumProperty.PropertyType, enumStringValue), null);
 		}
 
 
