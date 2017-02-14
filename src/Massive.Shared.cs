@@ -100,7 +100,17 @@ namespace Massive
 			}
 			else
 			{
-				p.SetValue(value);
+				if(value is MassiveCursorType)
+				{
+					if (!p.SetRefCursor())
+					{
+						throw new InvalidOperationException("ADO.NET provider does not support cursors");
+					}
+				}
+				else
+				{
+					p.SetValue(value);
+				}
 			}
 			cmd.Parameters.Add(p);
 		}
@@ -300,6 +310,19 @@ namespace Massive
 
 
 		/// <summary>
+		/// Use reflection to set named enum property to named value
+		/// </summary>
+		/// <param name="o">The object.</param>
+		/// <param name="enumPropertyName">The name of the public enum property to modify.</param>
+		/// <param name="enumStringValue">The string name of the enum value to set.</param>
+		public static void SetRuntimeEnumProperty(this object o, string enumPropertyName, string enumStringValue)
+		{
+			PropertyInfo pinfoEnumProperty = o.GetType().GetRuntimeProperty(enumPropertyName);
+			pinfoEnumProperty.SetValue(o, Enum.Parse(pinfoEnumProperty.PropertyType, enumStringValue));
+		}
+
+
+		/// <summary>
 		/// Turns the object into an ExpandoObject 
 		/// </summary>
 		/// <param name="o">The object to convert.</param>
@@ -411,6 +434,12 @@ namespace Massive
 
 
 	/// <summary>
+	/// Set this class as the value of a parameter to indicate that the underlying db cursor type should be used.
+	/// </summary>
+	public class MassiveCursorType { }
+
+
+	/// <summary>
 	/// A class that wraps your database table in Dynamic Funtime
 	/// </summary>
 	/// <seealso cref="System.Dynamic.DynamicObject" />
@@ -421,6 +450,10 @@ namespace Massive
 		private string _connectionString;
 		private IEnumerable<dynamic> _schema;
 		private string _primaryKeyFieldSequence;
+		/// <summary>
+		/// Set the value of named parameter to the value of this object in order to access ADO.NET provider cursor suppport
+		/// </summary>
+		public MassiveCursorType Cursor { get; } = new MassiveCursorType();
 		#endregion
 
 

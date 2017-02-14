@@ -41,6 +41,17 @@ namespace Massive
 	public static partial class ObjectExtensions
 	{
 		/// <summary>
+		/// Extension to set the parameter to the DB specific cursor type.
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <returns>Returns false if not supported on this provider.</returns>
+		private static bool SetRefCursor(this DbParameter p)
+		{
+			return false;
+		}
+
+
+		/// <summary>
 		/// Extension to set anonymous DbParameter
 		/// </summary>
 		/// <param name="p">The parameter.</param>
