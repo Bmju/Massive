@@ -614,15 +614,11 @@ namespace Massive
 		public IEnumerable<dynamic> QueryWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false)
 		{
 			var cmd = CreateCommandWithNamedParams(sql, inParams, outParams, ioParams, returnParams, isProcedure);
-			bool hasCursors = (cmd.Parameters.Cast<DbParameter>().Where(p => p.IsCursor()).FirstOrDefault() != null);
 			using(var conn = OpenConnection())
 			{
 				cmd.Connection = conn;
-				// provide wrapping transaction if needed (basically, when reading dereferenced cursors on Postgres)
-				using(var trans = ((hasCursors && cmd.CursorsRequireTransaction()) ? conn.BeginTransaction() : null))
+				using(var trans = ((cmd.IsCursorCommand() && CursorsRequireTransaction()) ? conn.BeginTransaction() : null))
 				{
-					// If Npqsql permanently reintroduce cursor derefencing then this call can be changed back to plain ExecuteReader() (but will be harmless if it remains).
-					// The transaction wrapping above is still needed either way.
 					using(var rdr = cmd.ExecuteDereferencingReader(conn, trans, this))
 					{
 						while(rdr.Read())

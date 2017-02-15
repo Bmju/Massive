@@ -80,13 +80,13 @@ namespace Massive
 
 
 		/// <summary>
-		/// Does cursor access on this command, on this provider require a wrapping transaction?
+		/// Returns true if this command is a cursor command. Does any additional pre-processsing necessary if so.
 		/// </summary>
-		/// <param name="cmd">The command to check.</param>
-		/// <returns>true if wrapping transaction required.</returns>
-		public static bool CursorsRequireTransaction(this DbCommand cmd)
+		/// <param name="cmd">The command.</param>
+		/// <returns>true if it's a cursor command</returns>
+		public static bool IsCursorCommand(this DbCommand cmd)
 		{
-			return false;
+			return cmd.Parameters.Cast<DbParameter>().Where(p => p.IsCursor()).FirstOrDefault() != null;
 		}
 
 
@@ -191,6 +191,16 @@ namespace Massive
 			}
 			_bindByNameDescriptor.SetValue(toAlter, true, null);	// keep true as the default as otherwise ODP.NET won't bind the parameters by name but by location.
 			_initialLongFetchSizeDescriptor.SetValue(toAlter, -1, null);	// this is the ideal value, it obtains the LONG value in one go.
+		}
+
+
+		/// <summary>
+		/// Does cursor access on this provider require a wrapping transaction?
+		/// </summary>
+		/// <returns>true if wrapping transaction required.</returns>
+		protected virtual bool CursorsRequireTransaction()
+		{
+			return false;
 		}
 
 
