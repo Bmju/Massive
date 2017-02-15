@@ -44,6 +44,20 @@ namespace Massive
 	public static partial class ObjectExtensions
 	{
 		/// <summary>
+		/// Yield return the next result set of this reader
+		/// </summary>
+		/// <param name="rdr">The reader.</param>
+		/// <returns>streaming enumerable with expandos, one for each row read</returns>
+		public static IEnumerable<dynamic> YieldResult(this DbDataReader rdr)
+		{
+			while(rdr.Read())
+			{
+				yield return rdr.RecordToExpando();
+			}
+		}
+
+
+		/// <summary>
 		/// Extension for adding single parameter.
 		/// </summary>
 		/// <param name="cmd">The command to add the parameter to.</param>
@@ -585,6 +599,29 @@ namespace Massive
 
 
 		/// <summary>
+		/// Enumerates a reader for multiple result sets
+		/// </summary>
+		/// <param name="sql">The SQL to execute as a command.</param>
+		/// <param name="args">The parameter values.</param>
+		/// <returns>streaming enumerable of enumerables, outer enumerable is the result sets, objects of inner enumerable are expandos, one for each row read</returns>
+		public virtual IEnumerable<IEnumerable<dynamic>> QueryMultiple(string sql, params object[] args)
+		{
+			using(var conn = OpenConnection())
+			{
+				using(var rdr = CreateCommand(sql, conn, args).ExecuteReader())
+				{
+					do
+					{
+						yield return rdr.YieldResult();
+					}
+					while(rdr.NextResult());
+				}
+				conn.Close();
+			}
+		}
+
+
+		/// <summary>
 		/// Enumerates a reader yielding the result of procedure or function call, with optional directional parameters.
 		/// For each set of parameters, you can pass in an Anonymous object, an ExpandoObject, a regular old POCO, or a NameValueCollection e.g. from a Request.Form or Request.QueryString.
 		/// </summary>
@@ -597,6 +634,22 @@ namespace Massive
 		public virtual IEnumerable<dynamic> QueryProcedure(string spName, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null)
 		{
 			return QueryWithParams(spName, inParams, outParams, ioParams, returnParams, true);
+		}
+
+
+		/// <summary>
+		/// Enumerates reader yielding multiple result sets from the result of procedure or function call, with optional directional parameters.
+		/// For each set of parameters, you can pass in an Anonymous object, an ExpandoObject, a regular old POCO, or a NameValueCollection e.g. from a Request.Form or Request.QueryString.
+		/// </summary>
+		/// <param name="spName">The procedure name.</param>
+		/// <param name="inParams">The input parameter collection. Additionally accepts object[] for anonymous parameter support, on ADO.NET providers which support this.</param>
+		/// <param name="outParams">The output parameter collection.</param>
+		/// <param name="ioParams">The input-output parameter collection.</param>
+		/// <param name="returnParams">The return value collection.</param>
+		/// <returns>streaming enumerable with expandos, one for each row read</returns>
+		public virtual IEnumerable<IEnumerable<dynamic>> QueryMultipleFromProcedure(string spName, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null)
+		{
+			return QueryMultipleWithParams(spName, inParams, outParams, ioParams, returnParams, true);
 		}
 
 
@@ -625,6 +678,38 @@ namespace Massive
 						{
 							yield return rdr.RecordToExpando();
 						}
+					}
+				}
+			}
+		}
+
+
+		/// <summary>
+		/// Enumerates reader yielding multiple result sets from the result of procedure, function or specified SQL, with optional directional parameters.
+		/// For each set of parameters, you can pass in an Anonymous object, an ExpandoObject, a regular old POCO, or a NameValueCollection e.g. from a Request.Form or Request.QueryString.
+		/// </summary>
+		/// <param name="sql">Stored procedure name (or general SQL if isProcedure=false)</param>
+		/// <param name="inParams">Input parameters (optional). Names and values are used.</param>
+		/// <param name="outParams">Output parameters (optional). Names are used. Values are used to determine parameter type.</param>
+		/// <param name="ioParams">Input-output parameters (optional). Names and values are used.</param>
+		/// <param name="returnParams">Return parameters (optional). Names are used. Values are used to determine parameter type.</param>
+		/// <param name="isProcedure">Whether to execute the command as stored procedure or general SQL. Defaults to general SQL.</param>
+		/// <returns>streaming enumerable with expandos, one for each row read</returns>
+		public IEnumerable<IEnumerable<dynamic>> QueryMultipleWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false)
+		{
+			var cmd = CreateCommandWithNamedParams(sql, inParams, outParams, ioParams, returnParams, isProcedure);
+			using(var conn = OpenConnection())
+			{
+				cmd.Connection = conn;
+				using(var trans = ((cmd.IsCursorCommand() && CursorsRequireTransaction()) ? conn.BeginTransaction() : null))
+				{
+					using(var rdr = cmd.ExecuteDereferencingReader(conn, trans, this))
+					{
+						do
+						{
+							yield return rdr.YieldResult();
+						}
+						while(rdr.NextResult());
 					}
 				}
 			}
