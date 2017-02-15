@@ -41,11 +41,47 @@ namespace Massive
 	public static partial class ObjectExtensions
 	{
 		/// <summary>
+		/// Return data reader, first dereferencing cursors if needed on this provider.
+		/// </summary>
+		/// <param name="cmd">The command.</param>
+		/// <param name="conn">The connection.</param>
+		/// <param name="trans">The transaction.</param>
+		/// <param name="db">The parent DynamicModel (or subclass).</param>
+		/// <returns>The reader.</returns>
+		public static DbDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection conn, DbTransaction trans, DynamicModel db)
+		{
+			return cmd.ExecuteReader();
+		}
+
+
+		/// <summary>
 		/// Extension to set the parameter to the DB specific cursor type.
 		/// </summary>
 		/// <param name="p">The parameter.</param>
 		/// <returns>Returns false if not supported on this provider.</returns>
-		private static bool SetRefCursor(this DbParameter p)
+		public static bool SetCursor(this DbParameter p)
+		{
+			return false;
+		}
+
+
+		/// <summary>
+		/// Check whether the parameter is of the DB specific cursor type.
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <returns>true if this is a cursor parameter.</returns>
+		public static bool IsCursor(this DbParameter p)
+		{
+			return false;
+		}
+
+
+		/// <summary>
+		/// Does cursor access on this command, on this provider require a wrapping transaction?
+		/// </summary>
+		/// <param name="cmd">The command to check.</param>
+		/// <returns>true if wrapping transaction required.</returns>
+		public static bool CursorsRequireTransaction(this DbCommand cmd)
 		{
 			return false;
 		}

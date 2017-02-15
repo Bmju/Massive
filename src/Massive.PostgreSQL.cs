@@ -32,6 +32,7 @@ using System.Data;
 using System.Data.Common;
 using System.Dynamic;
 using System.Linq;
+using System.Text;
 
 namespace Massive
 {
@@ -41,14 +42,77 @@ namespace Massive
     public static partial class ObjectExtensions
 	{
 		/// <summary>
+		/// Dereference cursors in exactly the way which used to be supported within Npgsql itself, but no longer is (see https://github.com/npgsql/npgsql/issues/438 )
+		/// </summary>
+		/// <param name="cmd">The command.</param>
+		/// <param name="conn">The connection - required for deferencing.</param>
+		/// <param name="trans">The transaction - required for deferencing.</param>
+		/// <param name="db">The parent DynamicModel (or subclass) - required to get at the factory for deferencing.</param>
+		/// <returns>The reader, dereferenced if needed.</returns>
+		/// <remarks>
+		/// This is basically the code from
+		/// https://github.com/npgsql/npgsql/commit/567a05c4edba072f2163da2fc51d84b691fd245f
+		/// which was unfortunately - for us - removed from Npgsql.
+		/// It allows the ExecuteReader pattern to read back the data from many (though not all) possible cursor return patterns on Postgres,
+		/// as long as everything is happening within a wrapping transaction, in order to keep the cursor references valid.
+		/// </remarks>
+		public static DbDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection conn, DbTransaction trans, DynamicModel db)
+		{
+			var reader = cmd.ExecuteReader();
+			
+			if(reader.FieldCount == 1 && reader.GetDataTypeName(0) == "refcursor")
+			{
+				if(trans == null)
+				{
+					// make a (reasonable) assumption in order to throw back a useful error message
+					throw new InvalidOperationException("You must specify at least one output or return cursor parameter in order to read back cursor results");
+				}
+				var sb = new StringBuilder();
+				while(reader.Read())
+				{
+					sb.AppendFormat(@"FETCH ALL FROM ""{0}"";", reader.GetString(0));
+				}
+				reader.Dispose();
+				
+				var dereferenceCmd = db.CreateCommand(sb.ToString(), conn);
+				return dereferenceCmd.ExecuteReader();
+			}
+
+			return reader;
+		}
+
+
+		/// <summary>
 		/// Extension to set the parameter to the DB specific cursor type.
 		/// </summary>
 		/// <param name="p">The parameter.</param>
 		/// <returns>Returns false if not supported on this provider.</returns>
-		private static bool SetRefCursor(this DbParameter p)
+		public static bool SetCursor(this DbParameter p)
 		{
 			// If we were explicitly linking to Npgsql.dll then this would just be ((NpgsqlParameter)p).NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Refcursor;
 			p.SetRuntimeEnumProperty("NpgsqlDbType", "Refcursor");
+			return true;
+		}
+
+
+		/// <summary>
+		/// Check whether the parameter is of the DB specific cursor type
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <returns>true if this is a cursor parameter.</returns>
+		public static bool IsCursor(this DbParameter p)
+		{
+			return p.GetRuntimeEnumProperty("NpgsqlDbType") == "Refcursor";
+		}
+
+
+		/// <summary>
+		/// Does cursor access on this command, on this provider require a wrapping transaction?
+		/// </summary>
+		/// <param name="cmd">The command to check.</param>
+		/// <returns>true if wrapping transaction required.</returns>
+		public static bool CursorsRequireTransaction(this DbCommand cmd)
+		{
 			return true;
 		}
 

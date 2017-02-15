@@ -102,9 +102,13 @@ namespace Massive
 			{
 				if(value is MassiveCursorType)
 				{
-					if (!p.SetRefCursor())
+					if (!p.SetCursor())
 					{
 						throw new InvalidOperationException("ADO.NET provider does not support cursors");
+					}
+					if (direction != ParameterDirection.ReturnValue && direction != ParameterDirection.Output)
+					{
+						throw new InvalidOperationException("Input cursors not supported");
 					}
 				}
 				else
@@ -320,6 +324,20 @@ namespace Massive
 			// Both these lines can be simpler in .NET 4.5
 			PropertyInfo pinfoEnumProperty = o.GetType().GetProperties().Where(property => property.Name == enumPropertyName).FirstOrDefault();
 			pinfoEnumProperty.SetValue(o, Enum.Parse(pinfoEnumProperty.PropertyType, enumStringValue), null);
+		}
+
+
+		/// <summary>
+		/// Use reflection to get string value of named enum property
+		/// </summary>
+		/// <param name="o">The object.</param>
+		/// <param name="enumPropertyName">The name of the public enum property to get.</param>
+		/// <returns></returns>
+		public static string GetRuntimeEnumProperty(this object o, string enumPropertyName)
+		{
+			// Both these lines can be simpler in .NET 4.5
+			PropertyInfo pinfoEnumProperty = o.GetType().GetProperties().Where(property => property.Name == enumPropertyName).FirstOrDefault();
+			return pinfoEnumProperty.GetValue(o, null).ToString();
 		}
 
 
@@ -600,18 +618,23 @@ namespace Massive
 		public IEnumerable<dynamic> QueryWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false)
 		{
 			var cmd = CreateCommandWithNamedParams(sql, inParams, outParams, ioParams, returnParams, isProcedure);
+			bool hasCursors = (cmd.Parameters.Cast<DbParameter>().Where(p => p.IsCursor()).FirstOrDefault() != null);
 			using(var conn = OpenConnection())
 			{
 				cmd.Connection = conn;
-				using(var rdr = cmd.ExecuteReader())
+				// provide wrapping transaction if needed (basically, when reading dereferenced cursors on Postgres)
+				using(var trans = ((hasCursors && cmd.CursorsRequireTransaction()) ? conn.BeginTransaction() : null))
 				{
-					while(rdr.Read())
+					// If Npqsql permanently reintroduce cursor derefencing then this call can be changed back to plain ExecuteReader() (but will be harmless if it remains).
+					// The transaction wrapping above is still needed either way.
+					using(var rdr = cmd.ExecuteDereferencingReader(conn, trans, this))
 					{
-						yield return rdr.RecordToExpando();
+						while(rdr.Read())
+						{
+							yield return rdr.RecordToExpando();
+						}
 					}
-					rdr.Close();
 				}
-				conn.Close();
 			}
 		}
 
@@ -1363,7 +1386,7 @@ namespace Massive
 		/// <param name="conn">The connection to assign the command to.</param>
 		/// <param name="args">The parameter values.</param>
 		/// <returns>new DbCommand, ready to rock</returns>
-		private DbCommand CreateCommand(string sql, DbConnection conn, params object[] args)
+		public DbCommand CreateCommand(string sql, DbConnection conn, params object[] args)
 		{
 			var result = _factory.CreateCommand();
 			if(result != null)
@@ -1387,7 +1410,7 @@ namespace Massive
 		/// <param name="returnParams">Object containing return parameter name:value pairs</param>
 		/// <param name="isProcedure">Whether to execute the command as stored procedure or general SQL.</param>
 		/// <returns>Ready to use DbCommand</returns>
-		private DbCommand CreateCommandWithNamedParams(string sql, object inParams, object outParams, object ioParams, object returnParams, bool isProcedure)
+		public DbCommand CreateCommandWithNamedParams(string sql, object inParams, object outParams, object ioParams, object returnParams, bool isProcedure)
 		{
 			DbCommand cmd = CreateCommand(sql, null);
 			if(isProcedure) cmd.CommandType = CommandType.StoredProcedure;
