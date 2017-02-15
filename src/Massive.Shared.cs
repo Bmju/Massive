@@ -666,7 +666,7 @@ namespace Massive
 		/// <returns>streaming enumerable with expandos, one for each row read</returns>
 		public IEnumerable<dynamic> QueryWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false)
 		{
-			var cmd = CreateCommandWithNamedParams(sql, inParams, outParams, ioParams, returnParams, isProcedure);
+			var cmd = CreateCommandWithNamedParams(sql, null, inParams, outParams, ioParams, returnParams, isProcedure);
 			using(var conn = OpenConnection())
 			{
 				cmd.Connection = conn;
@@ -697,7 +697,7 @@ namespace Massive
 		/// <returns>streaming enumerable with expandos, one for each row read</returns>
 		public IEnumerable<IEnumerable<dynamic>> QueryMultipleWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false)
 		{
-			var cmd = CreateCommandWithNamedParams(sql, inParams, outParams, ioParams, returnParams, isProcedure);
+			var cmd = CreateCommandWithNamedParams(sql, null, inParams, outParams, ioParams, returnParams, isProcedure);
 			using(var conn = OpenConnection())
 			{
 				cmd.Connection = conn;
@@ -821,7 +821,7 @@ namespace Massive
 		/// <returns>Dynamic holding return values of any output, input-output and return parameters.</returns>
 		public dynamic ExecuteWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false)
 		{
-			var cmd = CreateCommandWithNamedParams(sql, inParams, outParams, ioParams, returnParams, isProcedure);
+			var cmd = CreateCommandWithNamedParams(sql, null, inParams, outParams, ioParams, returnParams, isProcedure);
 			dynamic result = new ExpandoObject();
 			// return value of this call not relevant when CommandType = StoredProcedure , as per documentation always returns -1 in that case
 			Execute(cmd);
@@ -1481,15 +1481,16 @@ namespace Massive
 		/// Creates a new DbCommand from the sql statement specified, with support for parameter names and directions
 		/// </summary>
 		/// <param name="sql">sql to execute (typically just the Procedure or Function name, when isProcedure=true)</param>
+		/// <param name="conn">The connection to assign the command to.</param>
 		/// <param name="inParams">Object containing input parameter name:value pairs</param>
 		/// <param name="outParams">Object containing output parameter name:value pairs</param>
 		/// <param name="ioParams">Object containing input-output parameter name:value pairs</param>
 		/// <param name="returnParams">Object containing return parameter name:value pairs</param>
 		/// <param name="isProcedure">Whether to execute the command as stored procedure or general SQL.</param>
 		/// <returns>Ready to use DbCommand</returns>
-		public DbCommand CreateCommandWithNamedParams(string sql, object inParams, object outParams, object ioParams, object returnParams, bool isProcedure)
+		public DbCommand CreateCommandWithNamedParams(string sql, DbConnection conn, object inParams, object outParams, object ioParams, object returnParams, bool isProcedure)
 		{
-			DbCommand cmd = CreateCommand(sql, null);
+			DbCommand cmd = CreateCommand(sql, conn);
 			if(isProcedure) cmd.CommandType = CommandType.StoredProcedure;
 			cmd.AddNamedParams(inParams, ParameterDirection.Input);
 			cmd.AddNamedParams(outParams, ParameterDirection.Output);
