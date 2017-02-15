@@ -585,7 +585,7 @@ namespace Massive
 
 
 		/// <summary>
-		/// Stored procedure and function support for data reader.
+		/// Enumerates a reader yielding the result of procedure or function call, with optional directional parameters.
 		/// For each set of parameters, you can pass in an Anonymous object, an ExpandoObject, a regular old POCO, or a NameValueCollection e.g. from a Request.Form or Request.QueryString.
 		/// </summary>
 		/// <param name="spName">The procedure name.</param>
@@ -601,8 +601,7 @@ namespace Massive
 
 
 		/// <summary>
-		/// Execute procedure, function or specified SQL with optional directional parameters.
-		/// Enumerates the reader yielding the result.
+		/// Enumerates a reader yielding the result of procedure, function or specified SQL call, with optional directional parameters.
 		/// For each set of parameters, you can pass in an Anonymous object, an ExpandoObject, a regular old POCO, or a NameValueCollection e.g. from a Request.Form or Request.QueryString.
 		/// </summary>
 		/// <param name="sql">Stored procedure name (or general SQL if isProcedure=false)</param>
@@ -611,10 +610,7 @@ namespace Massive
 		/// <param name="ioParams">Input-output parameters (optional). Names and values are used.</param>
 		/// <param name="returnParams">Return parameters (optional). Names are used. Values are used to determine parameter type.</param>
 		/// <param name="isProcedure">Whether to execute the command as stored procedure or general SQL. Defaults to general SQL.</param>
-		/// <param name="result">Dynamic holding return values of any output, input-output and return parameters.</param>
-		/// <remarks>
-		/// Does not process any result sets; where input parameters only are required the first result set may be read using DynamicModel.Query instead.
-		/// </remarks>
+		/// <returns>streaming enumerable with expandos, one for each row read</returns>
 		public IEnumerable<dynamic> QueryWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false)
 		{
 			var cmd = CreateCommandWithNamedParams(sql, inParams, outParams, ioParams, returnParams, isProcedure);
@@ -741,7 +737,7 @@ namespace Massive
 		/// <param name="ioParams">Input-output parameters (optional). Names and values are used.</param>
 		/// <param name="returnParams">Return parameters (optional). Names are used. Values are used to determine parameter type.</param>
 		/// <param name="isProcedure">Whether to execute the command as stored procedure or general SQL. Defaults to general SQL.</param>
-		/// <param name="result">Dynamic holding return values of any output, input-output and return parameters.</param>
+		/// <returns>Dynamic holding return values of any output, input-output and return parameters.</returns>
 		public dynamic ExecuteWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false)
 		{
 			var cmd = CreateCommandWithNamedParams(sql, inParams, outParams, ioParams, returnParams, isProcedure);
