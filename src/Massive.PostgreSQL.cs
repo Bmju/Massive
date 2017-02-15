@@ -50,32 +50,50 @@ namespace Massive
 		/// <param name="db">The parent DynamicModel (or subclass) - required to get at the factory for deferencing.</param>
 		/// <returns>The reader, dereferenced if needed.</returns>
 		/// <remarks>
-		/// This is basically the code from
-		/// https://github.com/npgsql/npgsql/commit/567a05c4edba072f2163da2fc51d84b691fd245f
-		/// which was unfortunately - for us - removed from Npgsql.
-		/// It allows the ExecuteReader pattern to read back the data from many (though not all) possible cursor return patterns on Postgres,
-		/// as long as everything is happening within a wrapping transaction, in order to keep the cursor references valid.
+		///	 1.	This is basically the code from
+		///		https://github.com/npgsql/npgsql/commit/567a05c4edba072f2163da2fc51d84b691fd245f
+		///		which was unfortunately - for us - removed from Npgsql.
+		///		It allows the ExecuteReader pattern to read back the data from many (though not all) possible cursor return patterns on Postgres,
+		///		as long as everything is happening within a wrapping transaction (needed in order to keep the cursor references valid).
+		///		
+		///	 2.	If Npqsql permanently reintroduce cursor derefencing then all calls to this method can be changed back to plain ExecuteReader() (but it will be harmless if it remains).
 		/// </remarks>
 		public static DbDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection conn, DbTransaction trans, DynamicModel db)
 		{
 			var reader = cmd.ExecuteReader();
 			
-			if(reader.FieldCount == 1 && reader.GetDataTypeName(0) == "refcursor")
+			if(reader.FieldCount > 0)
 			{
-				if(trans == null)
+				bool canDereference = true;
+				for(int i = 0; i < reader.FieldCount; i++)
 				{
-					// make a (reasonable) assumption in order to throw back a useful error message
-					throw new InvalidOperationException("You must specify at least one output or return cursor parameter in order to read back cursor results");
+					if(reader.GetDataTypeName(i) != "refcursor")
+					{
+						canDereference = false;
+						break;
+					}
 				}
-				var sb = new StringBuilder();
-				while(reader.Read())
+
+				if(canDereference)
 				{
-					sb.AppendFormat(@"FETCH ALL FROM ""{0}"";", reader.GetString(0));
+					if(trans == null)
+					{
+						// make a (reasonable) assumption in order to throw back a useful error message
+						throw new InvalidOperationException("You must specify at least one output or return cursor parameter in order to read back cursor results");
+					}
+					var sb = new StringBuilder();
+					while(reader.Read())
+					{
+						for(int i = 0; i < reader.FieldCount; i++)
+						{
+							sb.AppendFormat(@"FETCH ALL FROM ""{0}"";", reader.GetString(i));
+						}
+					}
+					reader.Dispose();
+
+					var dereferenceCmd = db.CreateCommand(sb.ToString(), conn);
+					return dereferenceCmd.ExecuteReader();
 				}
-				reader.Dispose();
-				
-				var dereferenceCmd = db.CreateCommand(sb.ToString(), conn);
-				return dereferenceCmd.ExecuteReader();
 			}
 
 			return reader;
