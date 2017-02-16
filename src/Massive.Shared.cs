@@ -670,7 +670,7 @@ namespace Massive
 			using(var conn = OpenConnection())
 			{
 				cmd.Connection = conn;
-				using(var trans = ((cmd.IsCursorCommand() && CursorsRequireTransaction()) ? conn.BeginTransaction() : null))
+				using(var trans = ((CursorsRequireTransaction() && cmd.IsCursorCommand()) ? conn.BeginTransaction() : null))
 				{
 					using(var rdr = cmd.ExecuteDereferencingReader(conn, this))
 					{
@@ -701,7 +701,7 @@ namespace Massive
 			using(var conn = OpenConnection())
 			{
 				cmd.Connection = conn;
-				using(var trans = ((cmd.IsCursorCommand() && CursorsRequireTransaction()) ? conn.BeginTransaction() : null))
+				using(var trans = ((CursorsRequireTransaction() && cmd.IsCursorCommand()) ? conn.BeginTransaction() : null))
 				{
 					using(var rdr = cmd.ExecuteDereferencingReader(conn, this))
 					{
