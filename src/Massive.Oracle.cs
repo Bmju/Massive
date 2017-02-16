@@ -46,10 +46,9 @@ namespace Massive
 		/// </summary>
 		/// <param name="cmd">The command.</param>
 		/// <param name="conn">The connection.</param>
-		/// <param name="trans">The transaction.</param>
 		/// <param name="db">The parent DynamicModel (or subclass).</param>
 		/// <returns>The reader.</returns>
-		public static DbDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection conn, DbTransaction trans, DynamicModel db)
+		public static DbDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection conn, DynamicModel db)
 		{
 			return cmd.ExecuteReader();
 		}

@@ -32,6 +32,7 @@ using System.Data;
 using System.Data.Common;
 using System.Dynamic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 
 namespace Massive
@@ -45,8 +46,7 @@ namespace Massive
 		/// Dereference cursors in exactly the way which used to be supported within Npgsql itself, but no longer is (see https://github.com/npgsql/npgsql/issues/438 )
 		/// </summary>
 		/// <param name="cmd">The command.</param>
-		/// <param name="conn">The connection - required for deferencing.</param>
-		/// <param name="trans">The transaction - required for deferencing.</param>
+		/// <param name="Connection">The connection - required for deferencing.</param>
 		/// <param name="db">The parent DynamicModel (or subclass) - required to get at the factory for deferencing.</param>
 		/// <returns>The reader, dereferenced if needed.</returns>
 		/// <remarks>
@@ -58,41 +58,56 @@ namespace Massive
 		///		
 		///	 2.	If Npqsql permanently reintroduce cursor derefencing then all calls to this method can be changed back to plain ExecuteReader() (but it will be harmless if it remains).
 		/// </remarks>
-		public static DbDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection conn, DbTransaction trans, DynamicModel db)
+		public static DbDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection Connection, DynamicModel db, bool DereferenceCursors = true)
 		{
-			var reader = cmd.ExecuteReader();
-			
-			if(reader.FieldCount > 0)
+			var reader = cmd.ExecuteReader(); // Execute(behavior);
+
+			// Perhaps a bool property on NpgsqlCommand?
+			if (DereferenceCursors)
 			{
-				bool canDereference = true;
-				for(int i = 0; i < reader.FieldCount; i++)
+				// Transparently dereference returned cursors, where possible
+				bool cursors = false;
+				bool noncursors = false;
+				for (int i = 0; i < reader.FieldCount; i++)
 				{
-					if(reader.GetDataTypeName(i) != "refcursor")
-					{
-						canDereference = false;
-						break;
-					}
+					if (reader.GetDataTypeName(i) == "refcursor") cursors = true;
+					else noncursors = true;
 				}
 
-				if(canDereference)
+				// Don't consider dereferencing if no returned columns are cursors
+				if (cursors)
 				{
-					if(trans == null)
+					// Iff dereferencing was turned on, this will stop and complain if some but not all columns are cursors
+					if (noncursors)
 					{
-						// make a (reasonable) assumption in order to throw back a useful error message
-						throw new InvalidOperationException("You must specify at least one output or return cursor parameter in order to read back cursor results");
+						throw new InvalidOperationException("Command returns both cursor and non-cursor results. To read this data, please disable Npgsql cursor dereferencing and code your own FETCH commands for the cursor data.");
 					}
+
+					// Supports 1x1 1xN Nx1 (and NXM!) patterns of cursor data
+					// The resultant FETCH command(s) *will* properly stream the cursored data
 					var sb = new StringBuilder();
-					while(reader.Read())
+					while (reader.Read())
 					{
-						for(int i = 0; i < reader.FieldCount; i++)
+						for (int i = 0; i < reader.FieldCount; i++)
 						{
 							sb.AppendFormat(@"FETCH ALL FROM ""{0}"";", reader.GetString(i));
 						}
 					}
 					reader.Dispose();
 
-					var dereferenceCmd = db.CreateCommand(sb.ToString(), conn);
-					return dereferenceCmd.ExecuteReader();
+					var dereferenceCmd = db.CreateCommand(sb.ToString(), Connection); // new NpgsqlCommand(sb.ToString(), Connection);
+					try
+					{
+						return dereferenceCmd.ExecuteReader(); // .ExecuteReader(behavior);
+					}					
+					catch (DbException ex) //catch (PostgresException ex)
+					{
+						if ((string)((PropertyInfo)ex.GetType().GetProperties().Where(property => property.Name == "SqlState").FirstOrDefault()).GetValue(ex, null) == "34000") // if (ex.SqlState == "34000")
+						{
+							throw new InvalidOperationException("Cursor dereferencing requires a containing transaction. Please add one, or consider using TABLE return values instead as these are generally more efficient than cursors when using Npgsql to access PostgreSQL.");
+						}
+						throw;
+					}
 				}
 			}
 

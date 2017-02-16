@@ -672,7 +672,7 @@ namespace Massive
 				cmd.Connection = conn;
 				using(var trans = ((cmd.IsCursorCommand() && CursorsRequireTransaction()) ? conn.BeginTransaction() : null))
 				{
-					using(var rdr = cmd.ExecuteDereferencingReader(conn, trans, this))
+					using(var rdr = cmd.ExecuteDereferencingReader(conn, this))
 					{
 						while(rdr.Read())
 						{
@@ -703,7 +703,7 @@ namespace Massive
 				cmd.Connection = conn;
 				using(var trans = ((cmd.IsCursorCommand() && CursorsRequireTransaction()) ? conn.BeginTransaction() : null))
 				{
-					using(var rdr = cmd.ExecuteDereferencingReader(conn, trans, this))
+					using(var rdr = cmd.ExecuteDereferencingReader(conn, this))
 					{
 						do
 						{
