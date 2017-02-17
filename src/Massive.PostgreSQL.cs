@@ -91,10 +91,12 @@ namespace Massive
 					{
 						for (int i = 0; i < reader.FieldCount; i++)
 						{
-							// Note FETCH ALL FROM cursor will correctly stream the cursored data without any pathalogical server or client side buffering, even for huge datasets:
+							// Note that FETCH ALL FROM cursor correctly streams cursored data without any pathological server or client side buffering, even for huge datasets.
 							// http://stackoverflow.com/a/42297234/795690
-							// Closing consumed cursors as we go should add some saving in server side resources, with no obvious downside.
-							sb.AppendFormat(@"FETCH ALL FROM ""{0}"";CLOSE ""{0}"";", reader.GetString(i));
+							// Closing cursors as we go to save server side resources.
+							// TO DO: This *will* break if the cursor name contains ", which it can - the cursor references should be arguments.
+							// Have applied working (but less good) .Replace() fix here for use in Massive.
+							sb.AppendFormat(@"FETCH ALL FROM ""{0}"";CLOSE ""{0}"";", reader.GetString(i).Replace(@"""", @""""""));
 						}
 					}
 					reader.Dispose();
