@@ -50,13 +50,15 @@ namespace Massive
 		/// <param name="db">The parent DynamicModel (or subclass) - required to get at the factory for deferencing.</param>
 		/// <returns>The reader, dereferenced if needed.</returns>
 		/// <remarks>
-		///	 1.	This is basically the code from
-		///		https://github.com/npgsql/npgsql/commit/567a05c4edba072f2163da2fc51d84b691fd245f
-		///		which was unfortunately - for us - removed from Npgsql.
-		///		It allows the ExecuteReader pattern to read back the data from many (though not all) possible cursor return patterns on Postgres,
-		///		as long as everything is happening within a wrapping transaction (needed in order to keep the cursor references valid).
-		///		
-		///	 2.	If Npqsql permanently reintroduce cursor derefencing then all calls to this method can be changed back to plain ExecuteReader() (but it will be harmless if it remains).
+		/// This is now an improvement of the previously removed Npgsql code - although it is the same basic idea.
+		/// 
+		/// After extensive discussion, it should be noted that this is a fully correct way to dereference cursors - even for extrememly large datasets.
+		/// http://stackoverflow.com/questions/42292341/
+		/// 
+		/// Npgsql are also willing to see it committed back to their project.
+		/// https://github.com/npgsql/npgsql/issues/438
+		/// 
+		///	If/when Npqsql permanently reintroduces cursor derefencing then calls to this method can be changed back to plain ExecuteReader() calls (but this will be harmless if it remains).
 		/// </remarks>
 		public static DbDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection Connection, DynamicModel db, bool DereferenceCursors = true)
 		{
@@ -80,16 +82,17 @@ namespace Massive
 					// Iff dereferencing was turned on, this will stop and complain if some but not all columns are cursors
 					if (noncursors)
 					{
-						throw new InvalidOperationException("Command returns both cursor and non-cursor results. To read this data, please disable Npgsql cursor dereferencing and code your own FETCH commands for the cursor data.");
+						throw new InvalidOperationException("Command returns mixed cursor and non-cursor results. To read this data you must disable Npgsql automatic cursor dereferencing and write your own cursor FETCH commands.");
 					}
 
 					// Supports 1x1 1xN Nx1 (and NXM!) patterns of cursor data
-					// The resultant FETCH command(s) *will* properly stream the cursored data
 					var sb = new StringBuilder();
 					while (reader.Read())
 					{
 						for (int i = 0; i < reader.FieldCount; i++)
 						{
+							// Note FETCH ALL FROM cursor will correctly stream the cursored data without any pathalogical server or client side buffering, even for huge datasets:
+							// http://stackoverflow.com/a/42297234/795690
 							sb.AppendFormat(@"FETCH ALL FROM ""{0}"";", reader.GetString(i));
 						}
 					}
@@ -104,7 +107,7 @@ namespace Massive
 					{
 						if ((string)((PropertyInfo)ex.GetType().GetProperties().Where(property => property.Name == "SqlState").FirstOrDefault()).GetValue(ex, null) == "34000") // if (ex.SqlState == "34000")
 						{
-							throw new InvalidOperationException("Cursor dereferencing requires a containing transaction. Please add one, or consider using TABLE return values instead as these are generally more efficient than cursors when using Npgsql to access PostgreSQL.");
+							throw new InvalidOperationException("Cursor dereferencing requires a containing transaction. Please add one, or consider using TABLE return values instead: these are more efficient than cursors for small and medium sized data sets.");
 						}
 						throw;
 					}
