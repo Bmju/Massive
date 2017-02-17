@@ -93,7 +93,8 @@ namespace Massive
 						{
 							// Note FETCH ALL FROM cursor will correctly stream the cursored data without any pathalogical server or client side buffering, even for huge datasets:
 							// http://stackoverflow.com/a/42297234/795690
-							sb.AppendFormat(@"FETCH ALL FROM ""{0}"";", reader.GetString(i));
+							// Closing consumed cursors as we go should add some saving in server side resources, with no obvious downside.
+							sb.AppendFormat(@"FETCH ALL FROM ""{0}"";CLOSE ""{0}"";", reader.GetString(i));
 						}
 					}
 					reader.Dispose();
