@@ -114,19 +114,19 @@ namespace Massive
 			}
 			else
 			{
-				if(value is MassiveCursorType)
+				var cursor = value as Cursor;
+				if(cursor != null)
 				{
-					if (!p.SetCursor())
+					// Placeholder cursor ref; we only need the value if passing in a cursor by value
+					// doesn't work on Postgres.
+					if (!p.SetCursor(cursor.Value))
 					{
 						throw new InvalidOperationException("ADO.NET provider does not support cursors");
-					}
-					if (direction != ParameterDirection.ReturnValue && direction != ParameterDirection.Output)
-					{
-						throw new InvalidOperationException("Input cursors not supported");
 					}
 				}
 				else
 				{
+					// Note - the passed in parameter value can be a real cursor ref, this works - at least in Oracle
 					p.SetValue(value);
 				}
 			}
@@ -469,7 +469,27 @@ namespace Massive
 	/// <summary>
 	/// Set this class as the value of a parameter to indicate that the underlying db cursor type should be used.
 	/// </summary>
-	public class MassiveCursorType { }
+	public class Cursor
+	{
+		internal object Value { get; private set; }
+
+		/// <summary>
+		/// Construct an output or return direction cursor parameter
+		/// </summary>
+		public Cursor()
+		{
+		}
+
+
+		/// <summary>
+		/// Construct an input or input-output direction cursor parameter
+		/// </summary>
+		/// <param name="value">A cursor object returned previously by an output or return direction cursor parameter, or null</param>
+		public Cursor(object value)
+		{
+			Value = value;
+		}
+	}
 
 
 	/// <summary>
@@ -483,10 +503,6 @@ namespace Massive
 		private string _connectionString;
 		private IEnumerable<dynamic> _schema;
 		private string _primaryKeyFieldSequence;
-		/// <summary>
-		/// Set the value of named parameter to the value of this object in order to access ADO.NET provider cursor suppport
-		/// </summary>
-		public MassiveCursorType Cursor { get; } = new MassiveCursorType();
 		#endregion
 
 
@@ -631,9 +647,9 @@ namespace Massive
 		/// <param name="ioParams">The input-output parameter collection.</param>
 		/// <param name="returnParams">The return value collection.</param>
 		/// <returns>streaming enumerable with expandos, one for each row read</returns>
-		public virtual IEnumerable<dynamic> QueryProcedure(string spName, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null)
+		public virtual IEnumerable<dynamic> QueryFromProcedure(string spName, DbConnection conn = null, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null)
 		{
-			return QueryWithParams(spName, inParams, outParams, ioParams, returnParams, true);
+			return QueryWithParams(spName, conn, inParams, outParams, ioParams, returnParams, true);
 		}
 
 
@@ -647,9 +663,9 @@ namespace Massive
 		/// <param name="ioParams">The input-output parameter collection.</param>
 		/// <param name="returnParams">The return value collection.</param>
 		/// <returns>streaming enumerable with expandos, one for each row read</returns>
-		public virtual IEnumerable<IEnumerable<dynamic>> QueryMultipleFromProcedure(string spName, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null)
+		public virtual IEnumerable<IEnumerable<dynamic>> QueryMultipleFromProcedure(string spName, DbConnection conn = null, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null)
 		{
-			return QueryMultipleWithParams(spName, inParams, outParams, ioParams, returnParams, true);
+			return QueryMultipleWithParams(spName, conn, inParams, outParams, ioParams, returnParams, true);
 		}
 
 
@@ -664,23 +680,9 @@ namespace Massive
 		/// <param name="returnParams">Return parameters (optional). Names are used. Values are used to determine parameter type.</param>
 		/// <param name="isProcedure">Whether to execute the command as stored procedure or general SQL. Defaults to general SQL.</param>
 		/// <returns>streaming enumerable with expandos, one for each row read</returns>
-		public IEnumerable<dynamic> QueryWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false)
+		public IEnumerable<dynamic> QueryWithParams(string sql, DbConnection conn = null, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false)
 		{
-			var cmd = CreateCommandWithNamedParams(sql, null, inParams, outParams, ioParams, returnParams, isProcedure);
-			using(var conn = OpenConnection())
-			{
-				cmd.Connection = conn;
-				using(var trans = ((CursorsRequireTransaction() && cmd.IsCursorCommand()) ? conn.BeginTransaction() : null))
-				{
-					using(var rdr = cmd.ExecuteDereferencingReader(conn, this))
-					{
-						while(rdr.Read())
-						{
-							yield return rdr.RecordToExpando();
-						}
-					}
-				}
-			}
+			return QueryNWithParams<dynamic>(sql, conn, inParams, outParams, ioParams, returnParams, isProcedure);
 		}
 
 
@@ -695,22 +697,50 @@ namespace Massive
 		/// <param name="returnParams">Return parameters (optional). Names are used. Values are used to determine parameter type.</param>
 		/// <param name="isProcedure">Whether to execute the command as stored procedure or general SQL. Defaults to general SQL.</param>
 		/// <returns>streaming enumerable with expandos, one for each row read</returns>
-		public IEnumerable<IEnumerable<dynamic>> QueryMultipleWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false)
+		public IEnumerable<IEnumerable<dynamic>> QueryMultipleWithParams(string sql, DbConnection conn = null, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false)
 		{
-			var cmd = CreateCommandWithNamedParams(sql, null, inParams, outParams, ioParams, returnParams, isProcedure);
-			using(var conn = OpenConnection())
+			return QueryNWithParams<IEnumerable<dynamic>>(sql, conn, inParams, outParams, ioParams, returnParams, isProcedure);
+		}
+
+
+		/// <summary>
+		/// Share the main logic for QueryWithParams and QueryMultipleWithParams
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="sql"></param>
+		/// <param name="conn"></param>
+		/// <param name="inParams"></param>
+		/// <param name="outParams"></param>
+		/// <param name="ioParams"></param>
+		/// <param name="returnParams"></param>
+		/// <param name="isProcedure"></param>
+		/// <returns></returns>
+		private IEnumerable<T> QueryNWithParams<T>(string sql, DbConnection conn = null, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false)
+		{
+			using(var localConn = (conn == null ? OpenConnection() : null))
 			{
-				cmd.Connection = conn;
-				using(var trans = ((CursorsRequireTransaction() && cmd.IsCursorCommand()) ? conn.BeginTransaction() : null))
+				var cmd = CreateCommandWithNamedParams(sql, conn ?? localConn, inParams, outParams, ioParams, returnParams, isProcedure);
+				using(var trans = ((conn == null && cmd.RequiresWrappingTransaction()) ? localConn.BeginTransaction() : null))
 				{
-					using(var rdr = cmd.ExecuteDereferencingReader(conn, this))
+					using(var rdr = cmd.ExecuteDereferencingReader(conn ?? localConn, this))
 					{
-						do
+						if(typeof(T) == typeof(IEnumerable<dynamic>))
 						{
-							yield return rdr.YieldResult();
+							do
+							{
+								yield return (T)rdr.YieldResult();
+							}
+							while(rdr.NextResult());
 						}
-						while(rdr.NextResult());
+						else
+						{
+							while(rdr.Read())
+							{
+								yield return rdr.RecordToExpando();
+							}
+						}
 					}
+					if(trans != null) trans.Commit();
 				}
 			}
 		}
@@ -797,14 +827,15 @@ namespace Massive
 		/// For each set of parameters, you can pass in an Anonymous object, an ExpandoObject, a regular old POCO, or a NameValueCollection e.g. from a Request.Form or Request.QueryString.
 		/// </summary>
 		/// <param name="spName">The procedure name.</param>
+		/// <param name="conn">The connection to use, normally null to let Massive manage this.</param>
 		/// <param name="inParams">The input parameter collection. Additionally accepts object[] for anonymous parameter support, on ADO.NET providers which support this.</param>
 		/// <param name="outParams">The output parameter collection.</param>
 		/// <param name="ioParams">The input-output parameter collection.</param>
 		/// <param name="returnParams">The return value collection.</param>
 		/// <returns>Dynamic containing return values of all non-input parameters.</returns>
-		public virtual dynamic ExecuteProcedure(string spName, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null)
+		public virtual dynamic ExecuteAsProcedure(string spName, DbConnection conn = null, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null)
 		{
-			return ExecuteWithParams(spName, inParams, outParams, ioParams, returnParams, true);
+			return ExecuteWithParams(spName, conn, inParams, outParams, ioParams, returnParams, true);
 		}
 
 
@@ -819,16 +850,18 @@ namespace Massive
 		/// <param name="returnParams">Return parameters (optional). Names are used. Values are used to determine parameter type.</param>
 		/// <param name="isProcedure">Whether to execute the command as stored procedure or general SQL. Defaults to general SQL.</param>
 		/// <returns>Dynamic holding return values of any output, input-output and return parameters.</returns>
-		public dynamic ExecuteWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false)
+		public dynamic ExecuteWithParams(string sql, DbConnection conn = null, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false)
 		{
-			var cmd = CreateCommandWithNamedParams(sql, null, inParams, outParams, ioParams, returnParams, isProcedure);
 			dynamic result = new ExpandoObject();
-			// return value of this call not relevant when CommandType = StoredProcedure , as per documentation always returns -1 in that case
-			Execute(cmd);
-			var resultDictionary = (IDictionary<string, object>)result;
-			cmd.AddParamValuesToResult(outParams, resultDictionary);
-			cmd.AddParamValuesToResult(ioParams, resultDictionary);
-			cmd.AddParamValuesToResult(returnParams, resultDictionary);
+			using(var localConn = (conn == null ? OpenConnection() : null))
+			{
+				var cmd = CreateCommandWithNamedParams(sql, conn ?? localConn, inParams, outParams, ioParams, returnParams, isProcedure);
+				cmd.ExecuteNonQuery();
+				var resultDictionary = (IDictionary<string, object>)result;
+				cmd.AddParamValuesToResult(outParams, resultDictionary);
+				cmd.AddParamValuesToResult(ioParams, resultDictionary);
+				cmd.AddParamValuesToResult(returnParams, resultDictionary);
+			}
 			return result;
 		}
 

@@ -62,41 +62,65 @@ namespace Massive
 		/// </remarks>
 		public static DbDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection Connection, DynamicModel db, bool DereferenceCursors = true)
 		{
-			var reader = cmd.ExecuteReader(); // Execute(behavior);
+#if false
+			//// ORIGINAL CODE
+			var reader = cmd.ExecuteReader(); // var reader = Execute(behavior);
+
+			// Transparently dereference cursors returned from functions		
+			//////if (cmd.CommandType == CommandType.StoredProcedure && // if (CommandType == CommandType.StoredProcedure &&
+			if (reader.FieldCount == 1 &&
+				reader.GetDataTypeName(0) == "refcursor")
+			{
+				var sb = new StringBuilder();
+				while (reader.Read())
+				{
+					/////sb.AppendFormat(@"FETCH ALL FROM ""{0}"";", reader.GetString(0));
+					sb.AppendFormat(@"FETCH ALL FROM ""{0}"";", reader.GetString(0).Replace(@"""", @""""""));
+				}
+				reader.Dispose();
+
+				var dereferenceCmd = db.CreateCommand(sb.ToString(), Connection); // var dereferenceCmd = new NpgsqlCommand(sb.ToString(), Connection);
+				return dereferenceCmd.ExecuteReader(); // return dereferenceCmd.ExecuteReader(behavior);
+			}
+
+			return reader;
+#else
+			var reader = cmd.ExecuteReader(); // var reader = Execute(behavior);
 
 			// Perhaps a bool property on NpgsqlCommand?
 			if (DereferenceCursors)
 			{
 				// Transparently dereference returned cursors, where possible
 				bool cursors = false;
-				bool noncursors = false;
 				for (int i = 0; i < reader.FieldCount; i++)
 				{
-					if (reader.GetDataTypeName(i) == "refcursor") cursors = true;
-					else noncursors = true;
+					if(reader.GetDataTypeName(i) == "refcursor")
+					{
+						cursors = true;
+						break;
+					}
 				}
 
-				// Don't consider dereferencing if no returned columns are cursors
+				// Don't consider dereferencing if no returned columns are cursors.
+				// If just some are cursors then following the pre-existing convention set by the Oracle drivers, we dereference what we can.
 				if (cursors)
 				{
-					// Iff dereferencing was turned on, this will stop and complain if some but not all columns are cursors
-					if (noncursors)
-					{
-						throw new InvalidOperationException("Command returns mixed cursor and non-cursor results. To read this data you must disable Npgsql automatic cursor dereferencing and write your own cursor FETCH commands.");
-					}
-
 					// Supports 1x1 1xN Nx1 (and NXM!) patterns of cursor data
 					var sb = new StringBuilder();
 					while (reader.Read())
 					{
-						for (int i = 0; i < reader.FieldCount; i++)
+						for(int i = 0; i < reader.FieldCount; i++)
 						{
-							// Note that FETCH ALL FROM cursor correctly streams cursored data without any pathological server or client side buffering, even for huge datasets.
-							// http://stackoverflow.com/a/42297234/795690
-							// Closing cursors as we go to save server side resources.
-							// TO DO: This *will* break if the cursor name contains ", which it can - the cursor references should be arguments.
-							// Have applied working (but less good) .Replace() fix here for use in Massive.
-							sb.AppendFormat(@"FETCH ALL FROM ""{0}"";CLOSE ""{0}"";", reader.GetString(i).Replace(@"""", @""""""));
+							if(reader.GetDataTypeName(i) == "refcursor")
+							{
+								// Note that FETCH ALL FROM cursor correctly streams cursored data without any pathological server or client side buffering, even for huge datasets.
+								// http://stackoverflow.com/a/42297234/795690
+								// Closing cursors as we go to save server side resources.
+								// TO DO: This *will* break if the cursor name contains ", which it can - the cursor references should be arguments.
+								// Have applied working (but less good) .Replace() fix here for use in Massive.
+								sb.AppendFormat(@"FETCH ALL FROM ""{0}"";", reader.GetString(i).Replace(@"""", @""""""));
+								//////// CLOSE ""{0}"";
+							}
 						}
 					}
 					reader.Dispose();
@@ -110,6 +134,7 @@ namespace Massive
 					{
 						if ((string)((PropertyInfo)ex.GetType().GetProperties().Where(property => property.Name == "SqlState").FirstOrDefault()).GetValue(ex, null) == "34000") // if (ex.SqlState == "34000")
 						{
+							/////// For Massive purposes only - this will occur if the user did not provide a dummy cursor param
 							throw new InvalidOperationException("Cursor dereferencing requires a containing transaction. Please add one, or consider using TABLE return values instead: these are more efficient than cursors for small and medium sized data sets.");
 						}
 						throw;
@@ -118,6 +143,7 @@ namespace Massive
 			}
 
 			return reader;
+#endif
 		}
 
 
@@ -125,11 +151,13 @@ namespace Massive
 		/// Extension to set the parameter to the DB specific cursor type.
 		/// </summary>
 		/// <param name="p">The parameter.</param>
+		/// <param name="value">Object reference to an existing cursor from a previous output or return direction cursor parameter, or null.</param>
 		/// <returns>Returns false if not supported on this provider.</returns>
-		public static bool SetCursor(this DbParameter p)
+		public static bool SetCursor(this DbParameter p, object value)
 		{
 			// If we were explicitly linking to Npgsql.dll then this would just be ((NpgsqlParameter)p).NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Refcursor;
 			p.SetRuntimeEnumProperty("NpgsqlDbType", "Refcursor");
+			p.Value = value;
 			return true;
 		}
 
@@ -146,16 +174,19 @@ namespace Massive
 
 
 		/// <summary>
-		/// Returns true if this command is a cursor command. Does any additional pre-processsing necessary if so.
+		/// Returns true if this command requires a wrapping transaction.
 		/// </summary>
 		/// <param name="cmd">The command.</param>
-		/// <returns>true if it's a cursor command</returns>
-		public static bool IsCursorCommand(this DbCommand cmd)
+		/// <returns>true if it requires a wrapping transaction</returns>
+		/// <remarks>
+		/// Only relevant to Postgres cursor commands and in this case we do some relevant pre-processing of the command too.
+		/// </remarks>
+		public static bool RequiresWrappingTransaction(this DbCommand cmd)
 		{
 			// If we've got cursor parameters these are actually just placeholders to kick off cursor support (i.e. the wrapping transaction); we need to remove them before executing the command.
-			bool IsCursorCommand = false;
-			cmd.Parameters.Cast<DbParameter>().Where(p => p.IsCursor()).ToList().ForEach(p => { IsCursorCommand = true; cmd.Parameters.Remove(p); });
-			return IsCursorCommand;
+			bool isCursorCommand = false;
+			cmd.Parameters.Cast<DbParameter>().Where(p => p.IsCursor()).ToList().ForEach(p => { isCursorCommand = true; cmd.Parameters.Remove(p); });
+			return isCursorCommand;
 		}
 
 
@@ -235,16 +266,6 @@ namespace Massive
 		/// </summary>
 		private bool _sequenceValueCallsBeforeMainInsert = true;
 		#endregion
-
-		/// <summary>
-		/// Does cursor access on this provider require a wrapping transaction?
-		/// </summary>
-		/// <returns>true if wrapping transaction required.</returns>
-		protected virtual bool CursorsRequireTransaction()
-		{
-			return true;
-		}
-
 
 		/// <summary>
 		/// Gets a default value for the column as defined in the schema.
