@@ -28,7 +28,7 @@ namespace Massive.Tests.Oracle
 		[Test]
 		public void NormalWhereCall()
 		{
-			// Check that things are basically up and running before trying the new stuff
+			// Check that things are up and running normally before trying the new stuff
 			var db = new Department();
 			var rows = db.All(where: "LOC = :0", args: "Nowhere");
 			Assert.AreEqual(9, rows.ToList().Count);
@@ -42,7 +42,7 @@ namespace Massive.Tests.Oracle
 			Assert.AreEqual(1, intResult.a);
 		}
 
-		public class dateNullParams
+		public class dateNullParam
 		{
 			public DateTime? d { get; set; }
 		}
@@ -51,7 +51,7 @@ namespace Massive.Tests.Oracle
 		public void InitialNullDateOutputParam()
 		{
 			var db = new SPTestsDatabase();
-			dynamic dateResult = db.ExecuteWithParams("begin :d := SYSDATE; end;", outParams: new dateNullParams());
+			dynamic dateResult = db.ExecuteWithParams("begin :d := SYSDATE; end;", outParams: new dateNullParam());
 			Assert.AreEqual(typeof(DateTime), dateResult.d.GetType());
 		}
 
@@ -71,7 +71,7 @@ namespace Massive.Tests.Oracle
 			Assert.AreEqual(3, fnResult.returnValue);
 		}
 
-		public class intNullParams
+		public class intNullParam
 		{
 			public int? x { get; set; }
 		}
@@ -88,7 +88,7 @@ namespace Massive.Tests.Oracle
 		public void InitialNullInputOutputParam()
 		{
 			var db = new SPTestsDatabase();
-			dynamic squareResult = db.ExecuteAsProcedure("squareNum", ioParams: new intNullParams());
+			dynamic squareResult = db.ExecuteAsProcedure("squareNum", ioParams: new intNullParam());
 			Assert.AreEqual(null, squareResult.x);
 		}
 
