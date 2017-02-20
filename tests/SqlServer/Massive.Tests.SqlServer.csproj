@@ -89,6 +89,8 @@
     </Compile>
     <Compile Include="ConstantsEnums.cs" />
     <Compile Include="AsyncReadTests.cs" />
+    <Compile Include="SPTests.cs" />
+    <Compile Include="TableClasses\SPTestsDatabase.cs" />
     <Compile Include="WriteTests.cs" />
     <Compile Include="ReadTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
