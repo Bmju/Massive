@@ -84,8 +84,10 @@
     <Compile Include="ConstantsEnums.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ReadWriteTests.cs" />
+    <Compile Include="SPTests.cs" />
     <Compile Include="TableClasses\Customer.cs" />
     <Compile Include="TableClasses\Product.cs" />
+    <Compile Include="TableClasses\SPTestsDatabase.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
