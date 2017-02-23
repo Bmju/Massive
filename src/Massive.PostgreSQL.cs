@@ -210,13 +210,13 @@ namespace Massive
 
 
 		/// <summary>
-		/// Extension to check whether ADO.NET provider notices output parameter types (no point requiring user to provide them when it doesn't)
+		/// Extension to check whether ADO.NET provider ignores output parameter types (no point requiring user to provide them if it does)
 		/// </summary>
 		/// <param name="p">The parameter.</param>
-		/// <returns>Return true if output types should be enforced.</returns>
-		private static bool EnforceOutputTypes(this DbParameter p)
+		/// <returns>True if output parameter type is ignored when generating output data types.</returns>
+		private static bool IgnoresOutputTypes(this DbParameter p)
 		{
-			return false;
+			return true;
 		}
 
 
