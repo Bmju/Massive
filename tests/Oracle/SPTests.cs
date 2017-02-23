@@ -205,7 +205,7 @@ namespace Massive.Tests.Oracle
 			{
 				var res1 = db.ExecuteWithParams("begin open :p_rc for select* from emp where deptno = 10; end;", conn, outParams: new { p_rc = new Cursor() });
 				Assert.AreEqual("OracleRefCursor", res1.p_rc.GetType().Name);
-				// TO DO: This is an Oracle worked example test procedure which writes some data into a table - we should produce some output instead
+				// TO DO: This Oracle test procedure writes some data into a table; we should produce some output (e.g. a row count) instead
 				var res2 = db.ExecuteAsProcedure("cursor_in_out.process_cursor", conn, inParams: new { p_cursor = res1.p_rc });
 				Assert.AreEqual(0, ((IDictionary<string, object>)res2).Count);
 			}

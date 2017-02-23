@@ -265,24 +265,22 @@ namespace Massive.Tests.Oracle
 			Assert.AreEqual(typeof(string), itemCursorMix.anyname.GetType()); // NB PostgreSql ref cursors return as string
 		}
 
-		public void ToDo()
+#if false
+		[Test]
+		public void HugeCursorTest()
 		{
 			var db = new SPTestsDatabase();
 
-			// AFAIK these will never work (you can't assign to vars in SQL block)
-			//dynamic intResult = db.Execute(":a := 1", inParams: new aArgs());
-			//dynamic dateResult = db.Execute("begin :d := SYSDATE; end;", outParams: new myParamsD());
+			//// Huge cursor tests....
+			var config = db.Query("SELECT current_setting('work_mem') work_mem, current_setting('log_temp_files') log_temp_files").FirstOrDefault();
 
 #if false
-			//// Huge cursor tests....
-			var config = db.Query("SELECT current_setting('work_mem') work_mem, current_setting('log_temp_files') log_temp_files");
-
 			// huge data from SELECT *
-			//var resultLargeSelectTest = db.QueryWithParams("SELECT * FROM large");
-			//foreach(var item in resultLargeSelectTest)
-			//{
-			//	int a = 1;
-			//}
+			var resultLargeSelectTest = db.QueryWithParams("SELECT * FROM large");
+			foreach(var item in resultLargeSelectTest)
+			{
+				int a = 1;
+			}
 
 			// huge data from (implicit) FETCH ALL
 			var resultLargeProcTest = db.QueryFromProcedure("lump", returnParams: new { abc = new Cursor() });
@@ -291,6 +289,33 @@ namespace Massive.Tests.Oracle
 				break;
 			}
 #endif
+
+			// one item from cursor
+			using(var conn = db.OpenConnection())
+			{
+				using(var trans = conn.BeginTransaction())
+				{
+					var result = db.ExecuteAsProcedure("lump", conn, returnParams: new { abc = new Cursor() });
+					var singleItemTest = db.QueryWithParams($@"FETCH 5000000 FROM ""{result.abc}"";", conn);
+					foreach(var item in singleItemTest)
+					{
+						Console.WriteLine(item.id);
+						break;
+					}
+					db.Execute($@"CLOSE ""{result.abc}"";", conn);
+					trans.Commit();
+				}
+			}
+		}
+#endif
+
+		public void ToDo()
+		{
+			var db = new SPTestsDatabase();
+
+			// AFAIK these will never work (you can't assign to vars in SQL block)
+			//dynamic intResult = db.Execute(":a := 1", inParams: new aArgs());
+			//dynamic dateResult = db.Execute("begin :d := SYSDATE; end;", outParams: new myParamsD());
 		}
 
 		[TearDown]

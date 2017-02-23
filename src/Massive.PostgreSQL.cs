@@ -59,6 +59,14 @@ namespace Massive
 		/// https://github.com/npgsql/npgsql/issues/438
 		/// 
 		///	If/when Npqsql permanently reintroduces cursor derefencing then calls to this method can be changed back to plain ExecuteReader() calls (but this will be harmless if it remains).
+		///	
+		/// `FETCH ALL FROM cursor` works correctly, but it causes PostgreSQL to pre-buffer all the data requested server-side.
+		/// (as do *all* PostgreSQL cursor FETCH requests: REF).
+		/// We recommend using this automatic dereferencing support for small cursor accesses
+		/// (why? mainly because Oracle and SQL Server support exactly this dereferencing pattern)
+		/// and coding your own `FETCH n FROM cursor` calls if you are fetching large data.
+		/// `ExecuteNonQuery() is the pattern used in both the other databases to obtain the cursor refs
+		/// themselves, rather than the data which they refer to.
 		/// </remarks>
 		public static DbDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection Connection, DynamicModel db, bool DereferenceCursors = true)
 		{
@@ -113,11 +121,9 @@ namespace Massive
 						{
 							if(reader.GetDataTypeName(i) == "refcursor")
 							{
-								// Note that FETCH ALL FROM cursor correctly streams cursored data without any pathological server or client side buffering, even for huge datasets.
-								// http://stackoverflow.com/a/42297234/795690
-								// Closing cursors as we go to save server side resources.
-								// TO DO: This *will* break if the cursor name contains ", which it can - the cursor references should be arguments.
-								// Have applied working (but less good) .Replace() fix here for use in Massive.
+								// We are closing cursors as we go to save server side resources.
+								// The cursor name can contain ", so we stop it from breaking in that case.
+								// (NB there are no true input params to anonymous block, so we can't pass the cursor name more 'properly'.)
 								sb.AppendFormat(@"FETCH ALL FROM ""{0}"";", reader.GetString(i).Replace(@"""", @""""""));
 								//////// CLOSE ""{0}"";
 							}
@@ -134,7 +140,7 @@ namespace Massive
 					{
 						if ((string)((PropertyInfo)ex.GetType().GetProperties().Where(property => property.Name == "SqlState").FirstOrDefault()).GetValue(ex, null) == "34000") // if (ex.SqlState == "34000")
 						{
-							/////// For Massive purposes only - this will occur if the user did not provide a dummy cursor param
+							/////// In the Massive situation only: this exception should only occur if the user did not provide a dummy cursor param
 							throw new InvalidOperationException("Cursor dereferencing requires a containing transaction. Please add one, or consider using TABLE return values instead: these are more efficient than cursors for small and medium sized data sets.");
 						}
 						throw;
