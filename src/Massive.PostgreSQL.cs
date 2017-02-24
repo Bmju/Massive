@@ -161,7 +161,6 @@ namespace Massive
 		/// <returns>Returns false if not supported on this provider.</returns>
 		public static bool SetCursor(this DbParameter p, object value)
 		{
-			// If we were explicitly linking to Npgsql.dll then this would just be ((NpgsqlParameter)p).NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Refcursor;
 			p.SetRuntimeEnumProperty("NpgsqlDbType", "Refcursor");
 			p.Value = value;
 			return true;
@@ -203,8 +202,8 @@ namespace Massive
 		/// <returns>Returns false if not supported on this provider.</returns>
 		private static bool SetAnonymousParameter(this DbParameter p)
 		{
-            // pretty simple! but assume in principle more could be needed in some other provider
-            p.ParameterName = "";
+			// pretty simple! but assume in principle more could be needed in some other provider
+			p.ParameterName = "";
 			return true;
 		}
 

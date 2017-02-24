@@ -62,7 +62,6 @@ namespace Massive
 		/// <returns>Returns false if not supported on this provider.</returns>
 		public static bool SetCursor(this DbParameter p, object value)
 		{
-			// If we were explicitly linking to Oracle.DataAccess.dll then this would just be ((OracleParameter)p).OracleDbType = OracleDbType.RefCursor
 			p.SetRuntimeEnumProperty("OracleDbType", "RefCursor");
 			p.Value = value;
 			return true;
