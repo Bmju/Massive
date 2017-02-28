@@ -96,7 +96,7 @@ namespace Massive.Tests.Oracle
 		public void SingleRowFromTableValuedFunction()
 		{
 			var db = new SPTestsDatabase();
-			var record = db.QueryWithParams("SELECT * FROM table(GET_EMP(:p_EMPNO))", inParams: new { p_EMPNO = 7782 }).FirstOrDefault();
+			var record = db.QueryWithParams("SELECT * FROM table(GET_EMP(:p_EMPNO))", new { p_EMPNO = 7782 }).FirstOrDefault();
 			Assert.AreEqual(7782, record.EMPNO);
 			Assert.AreEqual("CLARK", record.ENAME);
 		}
@@ -203,10 +203,10 @@ namespace Massive.Tests.Oracle
 			// To share cursors between commands in Oracle the commands must use the same connection
 			using(var conn = db.OpenConnection())
 			{
-				var res1 = db.ExecuteWithParams("begin open :p_rc for select* from emp where deptno = 10; end;", conn, outParams: new { p_rc = new Cursor() });
+				var res1 = db.ExecuteWithParams("begin open :p_rc for select* from emp where deptno = 10; end;", outParams: new { p_rc = new Cursor() }, connectionToUse: conn);
 				Assert.AreEqual("OracleRefCursor", res1.p_rc.GetType().Name);
 				// TO DO: This Oracle test procedure writes some data into a table; we should produce some output (e.g. a row count) instead
-				var res2 = db.ExecuteAsProcedure("cursor_in_out.process_cursor", conn, inParams: new { p_cursor = res1.p_rc });
+				var res2 = db.ExecuteAsProcedure("cursor_in_out.process_cursor", inParams: new { p_cursor = res1.p_rc }, connectionToUse: conn);
 				Assert.AreEqual(0, ((IDictionary<string, object>)res2).Count);
 			}
 		}

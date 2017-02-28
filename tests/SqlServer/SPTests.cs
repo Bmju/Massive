@@ -64,7 +64,7 @@ namespace Massive.Tests.Oracle
 		public void QueryFromStoredProcedure()
 		{
 			var db = new SPTestsDatabase();
-			var people = db.QueryFromProcedure("uspGetEmployeeManagers", inParams: new { BusinessEntityID = 35 });
+			var people = db.QueryFromProcedure("uspGetEmployeeManagers", new { BusinessEntityID = 35 });
 			int count = 0;
 			foreach(var person in people)
 			{
@@ -79,7 +79,7 @@ namespace Massive.Tests.Oracle
 		{
 			var db = new SPTestsDatabase();
 			// Accessing table value functions on SQL Server (different syntax from Postgres, for example)
-			var person = db.QueryWithParams("SELECT * FROM dbo.ufnGetContactInformation(@PersonID)", inParams: new { @PersonID = 35 }).FirstOrDefault();
+			var person = db.QueryWithParams("SELECT * FROM dbo.ufnGetContactInformation(@PersonID)", new { @PersonID = 35 }).FirstOrDefault();
 			Assert.AreEqual(typeof(string), person.FirstName.GetType());
 		}
 

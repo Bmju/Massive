@@ -142,7 +142,7 @@ namespace Massive.Tests.Oracle
 		{
 			var db = new SPTestsDatabase();
 			// Again this is Postgres specific: output params are really part of data row and can be read that way
-			var record = db.QueryFromProcedure("test_vars", inParams: new { w = 2 }).FirstOrDefault();
+			var record = db.QueryFromProcedure("test_vars", new { w = 2 }).FirstOrDefault();
 			Assert.AreEqual(3, record.v);
 			Assert.AreEqual(4, record.w);
 			Assert.AreEqual(5, record.x);
@@ -152,7 +152,7 @@ namespace Massive.Tests.Oracle
 		public void QuerySetOfRecordsFromFunction()
 		{
 			var db = new SPTestsDatabase();
-			var setOfRecords = db.QueryFromProcedure("sum_n_product_with_tab", inParams: new { x = 10 });
+			var setOfRecords = db.QueryFromProcedure("sum_n_product_with_tab", new { x = 10 });
 			int count = 0;
 			foreach(var innerRecord in setOfRecords)
 			{
