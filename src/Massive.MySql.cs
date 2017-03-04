@@ -41,42 +41,98 @@ namespace Massive
 	public static partial class ObjectExtensions
 	{
 		/// <summary>
-		/// Extension for adding single parameter. 
+		/// Return data reader, first dereferencing cursors if needed on this provider.
 		/// </summary>
-		/// <param name="cmd">The command to add the parameter to.</param>
-		/// <param name="value">The value to add as a parameter to the command.</param>
-		public static void AddParam(this DbCommand cmd, object value)
+		/// <param name="cmd">The command.</param>
+		/// <param name="conn">The connection.</param>
+		/// <param name="db">The parent DynamicModel (or subclass).</param>
+		/// <returns>The reader.</returns>
+		public static DbDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection conn, DynamicModel db)
 		{
-			var p = cmd.CreateParameter();
-			p.ParameterName = string.Format("@{0}", cmd.Parameters.Count);
-			if(value == null)
+			return cmd.ExecuteReader();
+		}
+
+
+		/// <summary>
+		/// Extension to set the parameter to the DB specific cursor type.
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <param name="value">Object reference to an existing cursor from a previous output or return direction cursor parameter, or null.</param>
+		/// <returns>Returns false if not supported on this provider.</returns>
+		public static bool SetCursor(this DbParameter p, object value)
+		{
+			return false;
+		}
+
+
+		/// <summary>
+		/// Check whether the parameter is of the DB specific cursor type.
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <returns>true if this is a cursor parameter.</returns>
+		public static bool IsCursor(this DbParameter p)
+		{
+			return false;
+		}
+
+
+		/// <summary>
+		/// Returns true if this command requires a wrapping transaction.
+		/// </summary>
+		/// <param name="cmd">The command.</param>
+		/// <returns>true if it requires a wrapping transaction</returns>
+		public static bool RequiresWrappingTransaction(this DbCommand cmd)
+		{
+			return false;
+		}
+
+
+		/// <summary>
+		/// Extension to set anonymous DbParameter
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <returns>Returns false if not supported on this provider.</returns>
+		private static bool SetAnonymousParameter(this DbParameter p)
+		{
+			return false;
+		}
+
+
+		/// <summary>
+		/// Extension to check whether ADO.NET provider ignores output parameter types (no point requiring user to provide them if it does)
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <returns>True if output parameter type is ignored when generating output data types.</returns>
+		private static bool IgnoresOutputTypes(this DbParameter p)
+		{
+			return false;
+		}
+
+
+		/// <summary>
+		/// Extension to set ParameterDirection for single parameter, correcting for unexpected handling in specific ADO.NET providers.
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <param name="direction">The direction to set.</param>
+		private static void SetDirection(this DbParameter p, ParameterDirection direction)
+		{
+			p.Direction = direction;
+		}
+
+
+		/// <summary>
+		/// Extension to set Value (and implicitly DbType) for single parameter, adding support for provider unsupported types, etc.
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <param name="value">The non-null value to set. Nulls are handled in shared code.</param>
+		private static void SetValue(this DbParameter p, object value)
+		{
+			p.Value = value;
+			var valueAsString = value as string;
+			if (valueAsString != null)
 			{
-				p.Value = DBNull.Value;
+				p.Size = valueAsString.Length > 4000 ? -1 : 4000;
 			}
-			else
-			{
-				if(value is Guid)
-				{
-					p.Value = value.ToString();
-					p.DbType = DbType.String;
-					p.Size = 36;
-				}
-				else if(value is ExpandoObject)
-				{
-					var d = (IDictionary<string, object>)value;
-					p.Value = d.Values.FirstOrDefault();
-				}
-				else
-				{
-					p.Value = value;
-				}
-				var valueAsString = value as string;
-				if(valueAsString != null)
-				{
-					p.Size = valueAsString.Length > 4000 ? -1 : 4000;
-				}
-			}
-			cmd.Parameters.Add(p);
 		}
 	}
 
