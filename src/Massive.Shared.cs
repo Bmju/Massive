@@ -287,7 +287,7 @@ namespace Massive
 			{
 				return "";
 			}
-			throw new InvalidOperationException("CreateInstance does not yet support type " + type);
+			throw new InvalidOperationException("CreateInstance does not support type " + type);
 		}
 
 
