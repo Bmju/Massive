@@ -65,11 +65,11 @@ namespace Massive
 			// Supports 1x1 1xN Nx1 and NXM patterns of cursor data.
 			// If just some values are cursors we follow the pre-existing pattern set by the Oracle drivers, and dereference what we can.
 			// TO DO: Confirm pattern on SQL Server drivers.
-			while (reader.Read())
+			while(reader.Read())
 			{
-				for (int i = 0; i < reader.FieldCount; i++)
+				for(int i = 0; i < reader.FieldCount; i++)
 				{
-					if (reader.GetDataTypeName(i) == "refcursor")
+					if(reader.GetDataTypeName(i) == "refcursor")
 					{
 						// cursor name can potentially contain " so stop that breaking us
 						Cursors.Add(reader.GetString(i).Replace(@"""", @""""""));
@@ -90,7 +90,7 @@ namespace Massive
 		private string CloseCursor(bool ExecuteNow = true)
 		{
 			// close and dispose current fetch reader for this cursor
-			if (Reader != null)
+			if(Reader != null)
 			{
 				Reader.Close();
 				Reader.Dispose();
@@ -98,10 +98,13 @@ namespace Massive
 				// seems okay to close/dispose multiple times, if not we could not null Reader but add code to avoid this
 			}
 			// close cursor itself
-			if (!string.IsNullOrEmpty(Cursor))
+			if(!string.IsNullOrEmpty(Cursor))
 			{
 				var closeSql = string.Format(@"CLOSE ""{0}"";", Cursor);
-				if (!ExecuteNow) return closeSql;
+				if(!ExecuteNow)
+				{
+					return closeSql;
+				}
 				var closeCmd = Db.CreateCommand(closeSql, Connection); // new NpgsqlCommand(..., Connection);
 				closeCmd.ExecuteNonQuery();
 				closeCmd.Dispose();
@@ -117,7 +120,7 @@ namespace Massive
 		private void FetchNextNFromCursor(string closeSql = "")
 		{
 			// close and dispose previous fetch reader for this cursor
-			if (Reader != null)
+			if(Reader != null)
 			{
 				Reader.Close();
 				Reader.Dispose();
@@ -128,7 +131,7 @@ namespace Massive
 			Count = 0;
 		}
 
-#region IDataReader interface
+		#region IDataReader interface
 		public object this[string name] { get { return Reader[name]; } }
 		public object this[int i] { get { return Reader[i]; } }
 		public int Depth { get { return Reader.Depth; } }
@@ -172,12 +175,11 @@ namespace Massive
 
 		public bool NextResult()
 		{
-			if (Index >= Cursors.Count)
+			var closeSql = CloseCursor(Index >= Cursors.Count);
+			if(Index >= Cursors.Count)
 			{
-				CloseCursor();
 				return false;
 			}
-			var closeSql = CloseCursor(false);
 			Cursor = Cursors[Index++];
 			FetchNextNFromCursor(closeSql);
 			return true;
@@ -185,23 +187,23 @@ namespace Massive
 
 		public bool Read()
 		{
-			if (Reader != null)
+			if(Reader != null)
 			{
 				bool cursorHasNextRow = Reader.Read();
-				if (cursorHasNextRow)
+				if(cursorHasNextRow)
 				{
 					Count++;
 					return true;
 				}
 				// if rows expired before count we asked for, there is nothing more to fetch on this cursor
-				if (FetchSize <= 0 || Count < FetchSize) return false;
+				if(FetchSize <= 0 || Count < FetchSize) return false;
 			}
 			// if rows expired at count we asked for, there may or may not be more rows
 			FetchNextNFromCursor();
 			// recursive self-call
 			return Read();
 		}
-#endregion
+		#endregion
 	}
 
 	/// <summary>
@@ -218,9 +220,9 @@ namespace Massive
 		private static bool CanDereference(this IDataReader reader)
 		{
 			bool hasCursors = false;
-			for (int i = 0; i < reader.FieldCount; i++)
+			for(int i = 0; i < reader.FieldCount; i++)
 			{
-				if (reader.GetDataTypeName(i) == "refcursor")
+				if(reader.GetDataTypeName(i) == "refcursor")
 				{
 					hasCursors = true;
 					break;
@@ -247,7 +249,7 @@ namespace Massive
 
 			// Remarks: Do not consider dereferencing if no returned columns are cursors, but if just some are cursors then follow the pre-existing convention set by
 			// the Oracle drivers and dereference what we can. The rest of the pattern is that we only ever try to dereference on Query and Scalar, never on Execute.
-			if (db.AutoDereferenceCursors && reader.CanDereference())
+			if(db.AutoDereferenceCursors && reader.CanDereference())
 			{
 				return new NpgsqlDereferencingReader(reader, Connection, db, db.AutoDereferenceFetchSize);
 			}
@@ -358,11 +360,11 @@ namespace Massive
 		}
 	}
 
-    /// <summary>
-    /// A class that wraps your database table in Dynamic Funtime
-    /// </summary>
-    public partial class DynamicModel
-    {
+	/// <summary>
+	/// A class that wraps your database table in Dynamic Funtime
+	/// </summary>
+	public partial class DynamicModel
+	{
 		#region Constants
 		// Mandatory constants/variables every DB has to define. 
 		/// <summary>
@@ -405,7 +407,7 @@ namespace Massive
 			return result;
 		}
 
-		
+
 		/// <summary>
 		/// Gets the aggregate function to use in a scalar query for the fragment specified
 		/// </summary>
@@ -427,7 +429,7 @@ namespace Massive
 					return null;
 			}
 		}
-		
+
 
 		/// <summary>
 		/// Gets the sql statement to use for obtaining the identity/sequenced value of the last insert.
@@ -437,7 +439,7 @@ namespace Massive
 		{
 			return string.IsNullOrEmpty(_primaryKeyFieldSequence) ? string.Empty : string.Format("SELECT nextval('{0}')", _primaryKeyFieldSequence);
 		}
-		
+
 
 		/// <summary>
 		/// Gets the sql statement pattern for a count row query (count(*)). The pattern should include as place holders: {0} for source (FROM clause).
@@ -447,7 +449,7 @@ namespace Massive
 		{
 			return "SELECT COUNT(*) FROM {0} ";
 		}
-		
+
 
 		/// <summary>
 		/// Gets the name of the parameter with the prefix to use in a query, e.g. @rawName or :rawName
