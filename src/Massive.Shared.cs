@@ -153,11 +153,10 @@ namespace Massive
 
 
 		/// <summary>
-		/// Extension method for adding in a set of parameters with name, value and direction support.
-		/// args can be of type ExpandoObject, NameValueCollection (or subclass), anonymous type or POCO.
+		/// Extension method for adding in a set of parameters with name, value and direction support
 		/// </summary>
 		/// <param name="cmd">The command to add the parameters to.</param>
-		/// <param name="nameValuePairs">Parameter names, values and types.</param>
+		/// <param name="nameValuePairs">Parameter names, values and types; can be ExpandoObject, NameValueCollection (or subclass), anonymous type or POCO.</param>
 		/// <param name="direction">The parameter direction.</param>
 		/// <remarks>
 		/// object[] is also accepted for nameValuePairs in this method; this produces unnamed parameters, in ADO.NET providers which supported this.
