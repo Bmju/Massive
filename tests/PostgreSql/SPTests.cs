@@ -292,7 +292,8 @@ namespace Massive.Tests.Oracle
 			//}
 
 			var results = db.QueryMultipleFromProcedure("lump2", returnParams: new { abc = new Cursor() });
-			CheckMultiResultSetStructure(results, 10000000, 10000000, false, true);
+			db.AutoDereferenceFetchSize = 4000000;
+			CheckMultiResultSetStructure(results, 10000000, 10000000, true, true);
 
 			// one item from cursor
 			//using (var conn = db.OpenConnection())

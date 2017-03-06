@@ -40,8 +40,8 @@ namespace Massive
 	// Cursor dereferencing data reader, which may go back into Npgsql at some point
 	public class NpgsqlDereferencingReader : IDataReader
 	{
-		// TO DO: FetchCount to int property on NpgsqlCommand - and check (and probably use) the equivalent property name in JDBC
-		private readonly int FetchCount = 10000;
+		// TO DO: FetchSize to int property on NpgsqlCommand
+		private int FetchSize;
 
 		private DbDataReader Reader = null; // reader for current FETCH
 		private List<string> Cursors = new List<string>();
@@ -57,8 +57,9 @@ namespace Massive
 		/// <param name="reader">The reader for the undereferenced query.</param>
 		/// <param name="connection">The connection to use.</param>
 		/// <param name="db">We need this just for the DbCommand factory.</param>
-		internal NpgsqlDereferencingReader(DbDataReader reader, DbConnection connection, DynamicModel db)
+		internal NpgsqlDereferencingReader(DbDataReader reader, DbConnection connection, DynamicModel db, int fetchSize)
 		{
+			FetchSize = fetchSize; // <= 0 will do FETCH ALL (may be genuinely useful in some situations, but user has to request this explicitly)
 			Connection = connection;
 			Db = db;
 
@@ -122,7 +123,7 @@ namespace Massive
 				Reader.Dispose();
 			}
 			// fetch next n from cursor (optionally close previous cursor first)
-			var fetchCmd = Db.CreateCommand(closeSql + string.Format(@"FETCH {0} FROM ""{1}"";", FetchCount, Cursor), Connection); // new NpgsqlCommand(..., Connection);
+			var fetchCmd = Db.CreateCommand(closeSql + string.Format(@"FETCH {0} FROM ""{1}"";", (FetchSize <= 0 ? "ALL" : FetchSize.ToString()), Cursor), Connection); // new NpgsqlCommand(..., Connection);
 			Reader = fetchCmd.ExecuteReader(CommandBehavior.SingleResult);
 			Count = 0;
 		}
@@ -193,7 +194,7 @@ namespace Massive
 					return true;
 				}
 				// if rows expired before count we asked for, there is nothing more to fetch on this cursor
-				if (Count < FetchCount) return false;
+				if (FetchSize <= 0 || Count < FetchSize) return false;
 			}
 			// if rows expired at count we asked for, there may or may not be more rows
 			FetchNextNFromCursor();
@@ -248,7 +249,7 @@ namespace Massive
 		/// `ExecuteNonQuery() is the pattern used in both the other databases to obtain the cursor refs
 		/// themselves, rather than the data which they refer to.
 		/// </remarks>
-		public static IDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection Connection, DynamicModel db, bool DereferenceCursors = true)
+		public static IDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection Connection, DynamicModel db)
 		{
 #if false
 			//// ORIGINAL CODE
@@ -278,9 +279,9 @@ namespace Massive
 			// TO DO: DereferenceCursors as bool property on NpgsqlCommand?
 			// Remarks: Don't consider dereferencing if no returned columns are cursors, but if just some are cursors then follow the pre-existing convention set by
 			// the Oracle drivers and dereference what we can. The rest of the pattern is that we only ever try to dereference on Query and Scalar, never on Execute.
-			if (DereferenceCursors && reader.CanDereference())
+			if (db.AutoDereferenceCursors && reader.CanDereference())
 			{
-				return new NpgsqlDereferencingReader(reader, Connection, db);
+				return new NpgsqlDereferencingReader(reader, Connection, db, db.AutoDereferenceFetchSize);
 			}
 
 			return reader;
@@ -612,6 +613,16 @@ namespace Massive
 		{
 			get { return "SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = :0"; }
 		}
+
+		/// <summary>
+		/// Whether to dereference cursors.
+		/// </summary>
+		public bool AutoDereferenceCursors { get; set; } = true;
+
+		/// <summary>
+		/// The number of rows to fetch at once when dereferencing cursors.
+		/// </summary>
+		public int AutoDereferenceFetchSize { get; set; } = 10000;
 		#endregion
-    }
+	}
 }
