@@ -40,16 +40,15 @@ namespace Massive
 	// Cursor dereferencing data reader, which may go back into Npgsql at some point
 	public class NpgsqlDereferencingReader : IDataReader
 	{
-		// TO DO: FetchSize to int property on NpgsqlCommand
+		private DbConnection Connection;
+		private DynamicModel Db;
 		private int FetchSize;
 
-		private DbDataReader Reader = null; // reader for current FETCH
+		private DbDataReader Reader = null; // current FETCH reader
 		private List<string> Cursors = new List<string>();
 		private int Index = 0;
 		private string Cursor = null;
-		private int Count; // # read so far for current FETCH
-		private DbConnection Connection;
-		private DynamicModel Db;
+		private int Count; // # read on current FETCH
 
 		/// <summary>
 		/// Create a safe, sensible dereferencing reader; we have already checked that there are at least some cursors to dereference at this point.
@@ -64,7 +63,8 @@ namespace Massive
 			Db = db;
 
 			// Supports 1x1 1xN Nx1 and NXM patterns of cursor data.
-			// If just some are cursors we follow a pre-existing pattern set by the Oracle drivers, and dereference what we can.
+			// If just some values are cursors we follow the pre-existing pattern set by the Oracle drivers, and dereference what we can.
+			// TO DO: Confirm pattern on SQL Server drivers.
 			while (reader.Read())
 			{
 				for (int i = 0; i < reader.FieldCount; i++)
@@ -83,7 +83,7 @@ namespace Massive
 		}
 
 		/// <summary>
-		/// Close current FETCH cursor
+		/// Close current FETCH cursor on the database
 		/// </summary>
 		/// <param name="ExecuteNow">Iff false then return the SQL but don't execute the command</param>
 		/// <returns>The SQL to close the cursor, if there is one and this has not already been executed.</returns>
@@ -209,7 +209,13 @@ namespace Massive
 	/// </summary>
 	public static partial class ObjectExtensions
 	{
-		private static bool CanDereference(this DbDataReader reader)
+		/// <summary>
+		/// True iff current reader has cursors in its output types.
+		/// </summary>
+		/// <param name="reader">The reader to check</param>
+		/// <returns>Are there cursors?</returns>
+		/// <remarks>Part of NpgsqlDereferencingReader</remarks>
+		private static bool CanDereference(this IDataReader reader)
 		{
 			bool hasCursors = false;
 			for (int i = 0; i < reader.FieldCount; i++)
@@ -223,61 +229,23 @@ namespace Massive
 			return hasCursors;
 		}
 
+
 		/// <summary>
-		/// Dereference cursors in exactly the way which used to be supported within Npgsql itself, but no longer is (see https://github.com/npgsql/npgsql/issues/438 )
+		/// Dereference cursors in more or less the way which used to be supported within Npgsql itself, only now considerably improved from that removed, partial support.
 		/// </summary>
 		/// <param name="cmd">The command.</param>
 		/// <param name="Connection">The connection - required for deferencing.</param>
-		/// <param name="db">The parent DynamicModel (or subclass) - required to get at the factory for deferencing.</param>
+		/// <param name="db">The parent DynamicModel (or subclass) - required to get at the factory for deferencing and config vaules.</param>
 		/// <returns>The reader, dereferenced if needed.</returns>
 		/// <remarks>
-		/// This is now an improvement of the previously removed Npgsql code - although it is the same basic idea.
-		/// 
-		/// After extensive discussion, it should be noted that this is a fully correct way to dereference cursors - even for extrememly large datasets.
-		/// http://stackoverflow.com/questions/42292341/
-		/// 
-		/// Npgsql are also willing to see it committed back to their project.
 		/// https://github.com/npgsql/npgsql/issues/438
-		/// 
-		///	If/when Npqsql permanently reintroduces cursor derefencing then calls to this method can be changed back to plain ExecuteReader() calls (but this will be harmless if it remains).
-		///	
-		/// `FETCH ALL FROM cursor` works correctly, but it causes PostgreSQL to pre-buffer all the data requested server-side.
-		/// (as do *all* PostgreSQL cursor FETCH requests: REF).
-		/// We recommend using this automatic dereferencing support for small cursor accesses
-		/// (why? mainly because Oracle and SQL Server support exactly this dereferencing pattern)
-		/// and coding your own `FETCH n FROM cursor` calls if you are fetching large data.
-		/// `ExecuteNonQuery() is the pattern used in both the other databases to obtain the cursor refs
-		/// themselves, rather than the data which they refer to.
+		/// http://stackoverflow.com/questions/42292341/
 		/// </remarks>
 		public static IDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection Connection, DynamicModel db)
 		{
-#if false
-			//// ORIGINAL CODE
 			var reader = cmd.ExecuteReader(); // var reader = Execute(behavior);
 
-			// Transparently dereference cursors returned from functions		
-			//////if (cmd.CommandType == CommandType.StoredProcedure && // if (CommandType == CommandType.StoredProcedure &&
-			if (reader.FieldCount == 1 &&
-				reader.GetDataTypeName(0) == "refcursor")
-			{
-				var sb = new StringBuilder();
-				while (reader.Read())
-				{
-					/////sb.AppendFormat(@"FETCH ALL FROM ""{0}"";", reader.GetString(0));
-					sb.AppendFormat(@"FETCH ALL FROM ""{0}"";", reader.GetString(0).Replace(@"""", @""""""));
-				}
-				reader.Dispose();
-
-				var dereferenceCmd = db.CreateCommand(sb.ToString(), Connection); // var dereferenceCmd = new NpgsqlCommand(sb.ToString(), Connection);
-				return dereferenceCmd.ExecuteReader(); // return dereferenceCmd.ExecuteReader(behavior);
-			}
-
-			return reader;
-#else
-			var reader = cmd.ExecuteReader(); // var reader = Execute(behavior);
-
-			// TO DO: DereferenceCursors as bool property on NpgsqlCommand?
-			// Remarks: Don't consider dereferencing if no returned columns are cursors, but if just some are cursors then follow the pre-existing convention set by
+			// Remarks: Do not consider dereferencing if no returned columns are cursors, but if just some are cursors then follow the pre-existing convention set by
 			// the Oracle drivers and dereference what we can. The rest of the pattern is that we only ever try to dereference on Query and Scalar, never on Execute.
 			if (db.AutoDereferenceCursors && reader.CanDereference())
 			{
@@ -285,7 +253,6 @@ namespace Massive
 			}
 
 			return reader;
-#endif
 		}
 
 
