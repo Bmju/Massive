@@ -37,11 +37,172 @@ using System.Text;
 
 namespace Massive
 {
+	// Cursor dereferencing data reader, which may go back into Npgsql at some point
+	public class NpgsqlDereferencingReader : IDataReader
+	{
+		// TO DO: FetchCount to int property on NpgsqlCommand - and check (and probably use) the equivalent property name in JDBC
+		private readonly int FetchCount = 10000;
+
+		private DbDataReader Reader = null;
+		private List<string> Cursors = new List<string>();
+		private int Index = 0;
+		private string Cursor = null;
+		private int Count;
+		private DbConnection Connection;
+		private DynamicModel Db;
+
+		/// <summary>
+		/// Create a safe, sensible dereferencing reader; we have already checked that there are at least some cursors to dereference at this point.
+		/// </summary>
+		/// <param name="reader">The reader for the undereferenced query.</param>
+		/// <param name="connection">The connection to use.</param>
+		/// <param name="db">We need this just for the DbCommand factory.</param>
+		internal NpgsqlDereferencingReader(DbDataReader reader, DbConnection connection, DynamicModel db)
+		{
+			Connection = connection;
+			Db = db;
+
+			// Supports 1x1 1xN Nx1 and NXM patterns of cursor data.
+			// If just some are cursors we follow a pre-existing pattern set by the Oracle drivers, and dereference what we can.
+			while (reader.Read())
+			{
+				for (int i = 0; i < reader.FieldCount; i++)
+				{
+					if (reader.GetDataTypeName(i) == "refcursor")
+					{
+						// cursor name can potentially contain " so stop that breaking us
+						Cursors.Add(reader.GetString(i).Replace(@"""", @""""""));
+					}
+				}
+			}
+			reader.Close();
+			reader.Dispose();
+
+			NextResult();
+		}
+
+		private void CloseCursor()
+		{
+			// close and dispose of fetch reader
+			if (Reader != null)
+			{
+				Reader.Close();
+				Reader.Dispose();
+			}
+			// close cursor itself
+			if (!string.IsNullOrEmpty(Cursor))
+			{
+				var closeCmd = Db.CreateCommand(string.Format(@"CLOSE ""{0}"";", Cursor), Connection); // new NpgsqlCommand(..., Connection);
+				closeCmd.ExecuteNonQuery();
+				closeCmd.Dispose();
+			}
+		}
+
+		private void FetchNextNFromCursor()
+		{
+			// close and dispose of previoius fetch
+			if (Reader != null)
+			{
+				Reader.Close();
+				Reader.Dispose();
+			}
+			// fetch next n
+			var fetchCmd = Db.CreateCommand(string.Format(@"FETCH {0} FROM ""{1}"";", FetchCount, Cursor), Connection); // new NpgsqlCommand(..., Connection);
+			Reader = fetchCmd.ExecuteReader(CommandBehavior.SingleResult);
+			Count = 0;
+		}
+
+#region IDataReader interface
+		public object this[string name] { get { return Reader[name]; } }
+		public object this[int i] { get { return Reader[i]; } }
+		public int Depth { get { return Reader.Depth; } }
+		public int FieldCount { get { return Reader.FieldCount; } }
+		public bool IsClosed { get { return Reader.IsClosed; } }
+		public int RecordsAffected { get { return Reader.RecordsAffected; } }
+
+		public void Close()
+		{
+			CloseCursor();
+		}
+
+		public void Dispose()
+		{
+			CloseCursor();
+		}
+
+		public bool GetBoolean(int i) { return Reader.GetBoolean(i); }
+		public byte GetByte(int i) { return Reader.GetByte(i); }
+		public long GetBytes(int i, long fieldOffset, byte[] buffer, int bufferoffset, int length) { return Reader.GetBytes(i, fieldOffset, buffer, bufferoffset, length); }
+		public char GetChar(int i) { return Reader.GetChar(i); }
+		public long GetChars(int i, long fieldoffset, char[] buffer, int bufferoffset, int length) { return Reader.GetChars(i, fieldoffset, buffer, bufferoffset, length); }
+		public IDataReader GetData(int i) { return Reader.GetData(i); }
+		public string GetDataTypeName(int i) { return Reader.GetDataTypeName(i); }
+		public DateTime GetDateTime(int i) { return Reader.GetDateTime(i); }
+		public decimal GetDecimal(int i) { return Reader.GetDecimal(i); }
+		public double GetDouble(int i) { return Reader.GetDouble(i); }
+		public Type GetFieldType(int i) { return Reader.GetFieldType(i); }
+		public float GetFloat(int i) { return Reader.GetFloat(i); }
+		public Guid GetGuid(int i) { return Reader.GetGuid(i); }
+		public short GetInt16(int i) { return Reader.GetInt16(i); }
+		public int GetInt32(int i) { return Reader.GetInt32(i); }
+		public long GetInt64(int i) { return Reader.GetInt64(i); }
+		public string GetName(int i) { return Reader.GetName(i); }
+		public int GetOrdinal(string name) { return Reader.GetOrdinal(name); }
+		public DataTable GetSchemaTable() { return Reader.GetSchemaTable(); }
+		public string GetString(int i) { return Reader.GetString(i); }
+		public object GetValue(int i) { return Reader.GetValue(i); }
+		public int GetValues(object[] values) { return Reader.GetValues(values); }
+		public bool IsDBNull(int i) { return Reader.IsDBNull(i); }
+
+		public bool NextResult()
+		{
+			if (Index >= Cursors.Count) return false;
+			CloseCursor();
+			Cursor = Cursors[Index++];
+			FetchNextNFromCursor();
+			return true;
+		}
+
+		public bool Read()
+		{
+			if (Reader != null)
+			{
+				bool cursorHasNextRow = Reader.Read();
+				if (cursorHasNextRow)
+				{
+					Count++;
+					return true;
+				}
+				// if it expired before what we asked for, there is nothing more
+				if (Count < FetchCount) return false;
+			}
+			// if it expired at what we asked for, there might or might not be more
+			FetchNextNFromCursor();
+			// recursive call
+			return Read();
+		}
+#endregion
+	}
+
 	/// <summary>
 	/// Class which provides extension methods for various ADO.NET objects.
 	/// </summary>
-    public static partial class ObjectExtensions
+	public static partial class ObjectExtensions
 	{
+		private static bool CanDereference(this DbDataReader reader)
+		{
+			bool hasCursors = false;
+			for (int i = 0; i < reader.FieldCount; i++)
+			{
+				if (reader.GetDataTypeName(i) == "refcursor")
+				{
+					hasCursors = true;
+					break;
+				}
+			}
+			return hasCursors;
+		}
+
 		/// <summary>
 		/// Dereference cursors in exactly the way which used to be supported within Npgsql itself, but no longer is (see https://github.com/npgsql/npgsql/issues/438 )
 		/// </summary>
@@ -68,7 +229,7 @@ namespace Massive
 		/// `ExecuteNonQuery() is the pattern used in both the other databases to obtain the cursor refs
 		/// themselves, rather than the data which they refer to.
 		/// </remarks>
-		public static DbDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection Connection, DynamicModel db, bool DereferenceCursors = true)
+		public static IDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection Connection, DynamicModel db, bool DereferenceCursors = true)
 		{
 #if false
 			//// ORIGINAL CODE
@@ -95,57 +256,12 @@ namespace Massive
 #else
 			var reader = cmd.ExecuteReader(); // var reader = Execute(behavior);
 
-			// Perhaps a bool property on NpgsqlCommand?
-			if (DereferenceCursors)
+			// TO DO: DereferenceCursors as bool property on NpgsqlCommand?
+			// Remarks: Don't consider dereferencing if no returned columns are cursors, but if just some are cursors then follow the pre-existing convention set by
+			// the Oracle drivers and dereference what we can. The rest of the pattern is that we only ever try to dereference on Query and Scalar, never on Execute.
+			if (DereferenceCursors && reader.CanDereference())
 			{
-				// Transparently dereference returned cursors, where possible
-				bool cursors = false;
-				for (int i = 0; i < reader.FieldCount; i++)
-				{
-					if(reader.GetDataTypeName(i) == "refcursor")
-					{
-						cursors = true;
-						break;
-					}
-				}
-
-				// Don't consider dereferencing if no returned columns are cursors.
-				// If just some are cursors then following the pre-existing convention set by the Oracle drivers, we dereference what we can.
-				if (cursors)
-				{
-					// Supports 1x1 1xN Nx1 (and NXM!) patterns of cursor data
-					var sb = new StringBuilder();
-					while (reader.Read())
-					{
-						for(int i = 0; i < reader.FieldCount; i++)
-						{
-							if(reader.GetDataTypeName(i) == "refcursor")
-							{
-								// We are closing cursors as we go to save server side resources.
-								// The cursor name can contain ", so we stop it from breaking in that case.
-								// (NB there are no true input params to anonymous block, so we can't pass the cursor name more 'properly'.)
-								sb.AppendFormat(@"FETCH ALL FROM ""{0}"";", reader.GetString(i).Replace(@"""", @""""""));
-								//////// CLOSE ""{0}"";
-							}
-						}
-					}
-					reader.Dispose();
-
-					var dereferenceCmd = db.CreateCommand(sb.ToString(), Connection); // new NpgsqlCommand(sb.ToString(), Connection);
-					try
-					{
-						return dereferenceCmd.ExecuteReader(); // .ExecuteReader(behavior);
-					}					
-					catch (DbException ex) //catch (PostgresException ex)
-					{
-						if ((string)((PropertyInfo)ex.GetType().GetProperties().Where(property => property.Name == "SqlState").FirstOrDefault()).GetValue(ex, null) == "34000") // if (ex.SqlState == "34000")
-						{
-							/////// In the Massive situation only: this exception should only occur if the user did not provide a dummy cursor param
-							throw new InvalidOperationException("Cursor dereferencing requires a containing transaction. Please add one, or consider using TABLE return values instead: these are more efficient than cursors for small and medium sized data sets.");
-						}
-						throw;
-					}
-				}
+				return new NpgsqlDereferencingReader(reader, Connection, db);
 			}
 
 			return reader;
