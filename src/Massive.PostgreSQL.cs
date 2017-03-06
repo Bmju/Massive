@@ -195,10 +195,10 @@ namespace Massive
 					Count++;
 					return true;
 				}
-				// if rows expired before count we asked for, there is nothing more to fetch on this cursor
+				// if rows expired before requested count, there is nothing more to fetch on this cursor
 				if(FetchSize <= 0 || Count < FetchSize) return false;
 			}
-			// if rows expired at count we asked for, there may or may not be more rows
+			// if rows expired at requested count, there may or may not be more rows
 			FetchNextNFromCursor();
 			// recursive self-call
 			return Read();
