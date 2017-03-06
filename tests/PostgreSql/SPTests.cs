@@ -180,7 +180,7 @@ namespace Massive.Tests.Oracle
 
 		#region Dereferencing tests
 		// Test various dereferencing patters (more relevant since we are coding this ourselves)
-		private void CheckMultiResultSetStructure(IEnumerable<IEnumerable<dynamic>> results, int count0 = 1, int count1 = 1, bool breakTest = false)
+		private void CheckMultiResultSetStructure(IEnumerable<IEnumerable<dynamic>> results, int count0 = 1, int count1 = 1, bool breakTest = false, bool idTest = false)
 		{
 			int sets = 0;
 			int[] counts = new int[2];
@@ -189,7 +189,8 @@ namespace Massive.Tests.Oracle
 				foreach(var item in set)
 				{
 					counts[sets]++;
-					if(sets == 0) Assert.AreEqual(typeof(int), item.a.GetType());
+					if (idTest) Assert.AreEqual(typeof(int), item.id.GetType());
+					else if (sets == 0) Assert.AreEqual(typeof(int), item.a.GetType());
 					else Assert.AreEqual(typeof(int), item.c.GetType());
 					if(breakTest) break;
 				}
@@ -290,35 +291,27 @@ namespace Massive.Tests.Oracle
 			//	break;
 			//}
 
-			//var results = db.QueryMultipleFromProcedure("lump2", returnParams: new { abc = new Cursor() });
-			//foreach (var set in results)
-			//{
-			//	foreach (var item in set)
-			//	{
-			//		Console.WriteLine(item.id);
-			//		break;
-			//	}
-			//}
-
+			var results = db.QueryMultipleFromProcedure("lump2", returnParams: new { abc = new Cursor() });
+			CheckMultiResultSetStructure(results, 10000000, 10000000, false, true);
 
 			// one item from cursor
-			using (var conn = db.OpenConnection())
-			{
-				using (var trans = conn.BeginTransaction())
-				{
-					var result = db.ExecuteAsProcedure("lump2", returnParams: new { abc = new Cursor(), def = new Cursor() }, connection: conn);
-					var singleItemTest = db.QueryWithParams($@"FETCH 5000000 FROM ""{result.abc}"";", connection: conn);
-					foreach (var item in singleItemTest)
-					{
-						Console.WriteLine(item.id);
-						break;
-					}
-					// NB plain Execute() did NOT take a connection, and changing this MIGHT be an API breaking change??? TEST...!
-					// (This is the first, and so far only, really unwanted side effect of trying to stay 100% non-breaking.)
-					db.Execute($@"CLOSE ""{result.abc}"";", conn);
-					trans.Commit();
-				}
-			}
+			//using (var conn = db.OpenConnection())
+			//{
+			//	using (var trans = conn.BeginTransaction())
+			//	{
+			//		var result = db.ExecuteAsProcedure("lump2", returnParams: new { abc = new Cursor(), def = new Cursor() }, connection: conn);
+			//		var singleItemTest = db.QueryWithParams($@"FETCH 5000000 FROM ""{result.abc}"";", connection: conn);
+			//		foreach (var item in singleItemTest)
+			//		{
+			//			Console.WriteLine(item.id);
+			//			break;
+			//		}
+			//		 NB plain Execute() did NOT take a connection, and changing this MIGHT be an API breaking change??? TEST...!
+			//		 (This is the first, and so far only, really unwanted side effect of trying to stay 100% non-breaking.)
+			//		db.Execute($@"CLOSE ""{result.abc}"";", conn);
+			//		trans.Commit();
+			//	}
+			//}
 		}
 #endif
 

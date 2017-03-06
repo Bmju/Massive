@@ -43,11 +43,11 @@ namespace Massive
 		// TO DO: FetchCount to int property on NpgsqlCommand - and check (and probably use) the equivalent property name in JDBC
 		private readonly int FetchCount = 10000;
 
-		private DbDataReader Reader = null;
+		private DbDataReader Reader = null; // reader for current FETCH
 		private List<string> Cursors = new List<string>();
 		private int Index = 0;
 		private string Cursor = null;
-		private int Count;
+		private int Count; // # read so far for current FETCH
 		private DbConnection Connection;
 		private DynamicModel Db;
 
@@ -81,33 +81,48 @@ namespace Massive
 			NextResult();
 		}
 
-		private void CloseCursor()
+		/// <summary>
+		/// Close current FETCH cursor
+		/// </summary>
+		/// <param name="ExecuteNow">Iff false then return the SQL but don't execute the command</param>
+		/// <returns>The SQL to close the cursor, if there is one and this has not already been executed.</returns>
+		private string CloseCursor(bool ExecuteNow = true)
 		{
-			// close and dispose of fetch reader
+			// close and dispose current fetch reader for this cursor
 			if (Reader != null)
 			{
 				Reader.Close();
 				Reader.Dispose();
+				// not nulling Reader so that it still exists to pass on all the other override calls;
+				// seems okay to close/dispose multiple times, if not we could not null Reader but add code to avoid this
 			}
 			// close cursor itself
 			if (!string.IsNullOrEmpty(Cursor))
 			{
-				var closeCmd = Db.CreateCommand(string.Format(@"CLOSE ""{0}"";", Cursor), Connection); // new NpgsqlCommand(..., Connection);
+				var closeSql = string.Format(@"CLOSE ""{0}"";", Cursor);
+				if (!ExecuteNow) return closeSql;
+				var closeCmd = Db.CreateCommand(closeSql, Connection); // new NpgsqlCommand(..., Connection);
 				closeCmd.ExecuteNonQuery();
 				closeCmd.Dispose();
+				Cursor = null;
 			}
+			return "";
 		}
 
-		private void FetchNextNFromCursor()
+		/// <summary>
+		/// Fetch next N rows from current cursor
+		/// </summary>
+		/// <param name="closeSql">SQL to prepend, to close the previous cursor in a single round trip (optional)</param>
+		private void FetchNextNFromCursor(string closeSql = "")
 		{
-			// close and dispose of previoius fetch
+			// close and dispose previous fetch reader for this cursor
 			if (Reader != null)
 			{
 				Reader.Close();
 				Reader.Dispose();
 			}
-			// fetch next n
-			var fetchCmd = Db.CreateCommand(string.Format(@"FETCH {0} FROM ""{1}"";", FetchCount, Cursor), Connection); // new NpgsqlCommand(..., Connection);
+			// fetch next n from cursor (optionally close previous cursor first)
+			var fetchCmd = Db.CreateCommand(closeSql + string.Format(@"FETCH {0} FROM ""{1}"";", FetchCount, Cursor), Connection); // new NpgsqlCommand(..., Connection);
 			Reader = fetchCmd.ExecuteReader(CommandBehavior.SingleResult);
 			Count = 0;
 		}
@@ -156,10 +171,14 @@ namespace Massive
 
 		public bool NextResult()
 		{
-			if (Index >= Cursors.Count) return false;
-			CloseCursor();
+			if (Index >= Cursors.Count)
+			{
+				CloseCursor();
+				return false;
+			}
+			var closeSql = CloseCursor(false);
 			Cursor = Cursors[Index++];
-			FetchNextNFromCursor();
+			FetchNextNFromCursor(closeSql);
 			return true;
 		}
 
@@ -173,12 +192,12 @@ namespace Massive
 					Count++;
 					return true;
 				}
-				// if it expired before what we asked for, there is nothing more
+				// if rows expired before count we asked for, there is nothing more to fetch on this cursor
 				if (Count < FetchCount) return false;
 			}
-			// if it expired at what we asked for, there might or might not be more
+			// if rows expired at count we asked for, there may or may not be more rows
 			FetchNextNFromCursor();
-			// recursive call
+			// recursive self-call
 			return Read();
 		}
 #endregion
