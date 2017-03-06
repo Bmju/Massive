@@ -203,10 +203,10 @@ namespace Massive.Tests.Oracle
 			// To share cursors between commands in Oracle the commands must use the same connection
 			using(var conn = db.OpenConnection())
 			{
-				var res1 = db.ExecuteWithParams("begin open :p_rc for select* from emp where deptno = 10; end;", outParams: new { p_rc = new Cursor() }, connectionToUse: conn);
+				var res1 = db.ExecuteWithParams("begin open :p_rc for select* from emp where deptno = 10; end;", outParams: new { p_rc = new Cursor() }, connection: conn);
 				Assert.AreEqual("OracleRefCursor", res1.p_rc.GetType().Name);
 				// TO DO: This Oracle test procedure writes some data into a table; we should produce some output (e.g. a row count) instead
-				var res2 = db.ExecuteAsProcedure("cursor_in_out.process_cursor", inParams: new { p_cursor = res1.p_rc }, connectionToUse: conn);
+				var res2 = db.ExecuteAsProcedure("cursor_in_out.process_cursor", inParams: new { p_cursor = res1.p_rc }, connection: conn);
 				Assert.AreEqual(0, ((IDictionary<string, object>)res2).Count);
 			}
 		}

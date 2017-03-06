@@ -246,17 +246,17 @@ namespace Massive
 		public virtual async Task<int> ExecuteAsync(IEnumerable<DbCommand> commands, CancellationToken cancellationToken)
 		{
 			var result = 0;
-			using(var connectionToUse = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false))
+			using(var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false))
 			{
-				using(var transactionToUse = connectionToUse.BeginTransaction())
+				using(var transactionToUse = connection.BeginTransaction())
 				{
 					foreach(var cmd in commands)
 					{
-						result += await ExecuteDbCommandAsync(cmd, connectionToUse, transactionToUse, cancellationToken).ConfigureAwait(false);
+						result += await ExecuteDbCommandAsync(cmd, connection, transactionToUse, cancellationToken).ConfigureAwait(false);
 					}
 					transactionToUse.Commit();
 				}
-				connectionToUse.Close();
+				connection.Close();
 			}
 			return result;
 		}
@@ -785,9 +785,9 @@ namespace Massive
 		private async Task<int> PerformSaveAsync(bool allSavesAreInserts, CancellationToken cancellationToken, params object[] toSave)
 		{
 			var result = 0;
-			using(var connectionToUse = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false))
+			using(var connection = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false))
 			{
-				using(var transactionToUse = connectionToUse.BeginTransaction())
+				using(var transactionToUse = connection.BeginTransaction())
 				{
 					foreach(var o in toSave)
 					{
@@ -797,13 +797,13 @@ namespace Massive
 							if(!allSavesAreInserts && HasPrimaryKey(o))
 							{
 								// update
-								result += await ExecuteDbCommandAsync(CreateUpdateCommand(oAsExpando, GetPrimaryKey(o)), connectionToUse, transactionToUse, cancellationToken).ConfigureAwait(false);
+								result += await ExecuteDbCommandAsync(CreateUpdateCommand(oAsExpando, GetPrimaryKey(o)), connection, transactionToUse, cancellationToken).ConfigureAwait(false);
 								Updated(oAsExpando);
 							}
 							else
 							{
 								// insert
-								await PerformInsertAsync(connectionToUse, transactionToUse, oAsExpando).ConfigureAwait(false);
+								await PerformInsertAsync(connection, transactionToUse, oAsExpando).ConfigureAwait(false);
 								Inserted(oAsExpando);
 								result++;
 							}
@@ -811,7 +811,7 @@ namespace Massive
 					}
 					transactionToUse.Commit();
 				}
-				connectionToUse.Close();
+				connection.Close();
 			}
 			return result;
 		}
@@ -821,13 +821,13 @@ namespace Massive
 		/// Async variant of ExecuteDbCommand. Executes the database command specified
 		/// </summary>
 		/// <param name="cmd">The command.</param>
-		/// <param name="connectionToUse">The connection to use, has to be open.</param>
+		/// <param name="connection">The connection to use, has to be open.</param>
 		/// <param name="transactionToUse">The transaction to use, can be null.</param>
 		/// <param name="cancellationToken">The cancellation token.</param>
 		/// <returns></returns>
-		private Task<int> ExecuteDbCommandAsync(DbCommand cmd, DbConnection connectionToUse, DbTransaction transactionToUse, CancellationToken cancellationToken)
+		private Task<int> ExecuteDbCommandAsync(DbCommand cmd, DbConnection connection, DbTransaction transactionToUse, CancellationToken cancellationToken)
 		{
-			cmd.Connection = connectionToUse;
+			cmd.Connection = connection;
 			cmd.Transaction = transactionToUse;
 			return cmd.ExecuteNonQueryAsync(cancellationToken);
 		}

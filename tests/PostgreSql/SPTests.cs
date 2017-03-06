@@ -274,34 +274,47 @@ namespace Massive.Tests.Oracle
 			//// Huge cursor tests....
 			var config = db.Query("SELECT current_setting('work_mem') work_mem, current_setting('log_temp_files') log_temp_files").FirstOrDefault();
 
-#if false
-			// huge data from SELECT *
-			var resultLargeSelectTest = db.QueryWithParams("SELECT * FROM large");
-			foreach(var item in resultLargeSelectTest)
-			{
-				int a = 1;
-			}
+			//// huge data from SELECT *
+			//var resultLargeSelectTest = db.QueryWithParams("SELECT * FROM large");
+			//foreach(var item in resultLargeSelectTest)
+			//{
+			//	int a = 1;
+			//}
 
-			// huge data from (implicit) FETCH ALL
-			var resultLargeProcTest = db.QueryFromProcedure("lump", returnParams: new { abc = new Cursor() });
-			foreach(var item in resultLargeProcTest)
-			{
-				break;
-			}
-#endif
+			//// huge data from (implicit) FETCH ALL
+			//// AUTO-DEREFERENCE TWO HUGE, ONLY FETCH FROM ONE
+			//var resultLargeProcTest = db.QueryFromProcedure("lump2", returnParams: new { abc = new Cursor() });
+			//foreach (var item in resultLargeProcTest)
+			//{
+			//	Console.WriteLine(item.id);
+			//	break;
+			//}
+
+			//var results = db.QueryMultipleFromProcedure("lump2", returnParams: new { abc = new Cursor() });
+			//foreach (var set in results)
+			//{
+			//	foreach (var item in set)
+			//	{
+			//		Console.WriteLine(item.id);
+			//		break;
+			//	}
+			//}
+
 
 			// one item from cursor
-			using(var conn = db.OpenConnection())
+			using (var conn = db.OpenConnection())
 			{
-				using(var trans = conn.BeginTransaction())
+				using (var trans = conn.BeginTransaction())
 				{
-					var result = db.ExecuteAsProcedure("lump", conn, returnParams: new { abc = new Cursor() });
-					var singleItemTest = db.QueryWithParams($@"FETCH 5000000 FROM ""{result.abc}"";", conn);
-					foreach(var item in singleItemTest)
+					var result = db.ExecuteAsProcedure("lump2", returnParams: new { abc = new Cursor(), def = new Cursor() }, connection: conn);
+					var singleItemTest = db.QueryWithParams($@"FETCH 5000000 FROM ""{result.abc}"";", connection: conn);
+					foreach (var item in singleItemTest)
 					{
 						Console.WriteLine(item.id);
 						break;
 					}
+					// NB plain Execute() did NOT take a connection, and changing this MIGHT be an API breaking change??? TEST...!
+					// (This is the first, and so far only, really unwanted side effect of trying to stay 100% non-breaking.)
 					db.Execute($@"CLOSE ""{result.abc}"";", conn);
 					trans.Commit();
 				}
