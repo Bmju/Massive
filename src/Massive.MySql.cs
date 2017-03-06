@@ -47,9 +47,20 @@ namespace Massive
 		/// <param name="conn">The connection.</param>
 		/// <param name="db">The parent DynamicModel (or subclass).</param>
 		/// <returns>The reader.</returns>
-		public static DbDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection conn, DynamicModel db)
+		internal static IDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection conn, DynamicModel db)
 		{
 			return cmd.ExecuteReader();
+		}
+
+
+		/// <summary>
+		/// Returns true if this command requires a wrapping transaction.
+		/// </summary>
+		/// <param name="cmd">The command.</param>
+		/// <returns>true if it requires a wrapping transaction</returns>
+		internal static bool RequiresWrappingTransaction(this DbCommand cmd)
+		{
+			return false;
 		}
 
 
@@ -59,7 +70,7 @@ namespace Massive
 		/// <param name="p">The parameter.</param>
 		/// <param name="value">Object reference to an existing cursor from a previous output or return direction cursor parameter, or null.</param>
 		/// <returns>Returns false if not supported on this provider.</returns>
-		public static bool SetCursor(this DbParameter p, object value)
+		private static bool SetCursor(this DbParameter p, object value)
 		{
 			return false;
 		}
@@ -70,18 +81,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="p">The parameter.</param>
 		/// <returns>true if this is a cursor parameter.</returns>
-		public static bool IsCursor(this DbParameter p)
-		{
-			return false;
-		}
-
-
-		/// <summary>
-		/// Returns true if this command requires a wrapping transaction.
-		/// </summary>
-		/// <param name="cmd">The command.</param>
-		/// <returns>true if it requires a wrapping transaction</returns>
-		public static bool RequiresWrappingTransaction(this DbCommand cmd)
+		private static bool IsCursor(this DbParameter p)
 		{
 			return false;
 		}

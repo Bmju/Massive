@@ -243,7 +243,7 @@ namespace Massive
 		/// https://github.com/npgsql/npgsql/issues/438
 		/// http://stackoverflow.com/questions/42292341/
 		/// </remarks>
-		public static IDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection Connection, DynamicModel db)
+		internal static IDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection Connection, DynamicModel db)
 		{
 			var reader = cmd.ExecuteReader(); // var reader = Execute(behavior);
 
@@ -259,12 +259,29 @@ namespace Massive
 
 
 		/// <summary>
+		/// Returns true if this command requires a wrapping transaction.
+		/// </summary>
+		/// <param name="cmd">The command.</param>
+		/// <returns>true if it requires a wrapping transaction</returns>
+		/// <remarks>
+		/// Only relevant to Postgres cursor commands and in this case we do some relevant pre-processing of the command too.
+		/// </remarks>
+		internal static bool RequiresWrappingTransaction(this DbCommand cmd)
+		{
+			// If we've got cursor parameters these are actually just placeholders to kick off cursor support (i.e. the wrapping transaction); we need to remove them before executing the command.
+			bool isCursorCommand = false;
+			cmd.Parameters.Cast<DbParameter>().Where(p => p.IsCursor()).ToList().ForEach(p => { isCursorCommand = true; cmd.Parameters.Remove(p); });
+			return isCursorCommand;
+		}
+
+
+		/// <summary>
 		/// Extension to set the parameter to the DB specific cursor type.
 		/// </summary>
 		/// <param name="p">The parameter.</param>
 		/// <param name="value">Object reference to an existing cursor from a previous output or return direction cursor parameter, or null.</param>
 		/// <returns>Returns false if not supported on this provider.</returns>
-		public static bool SetCursor(this DbParameter p, object value)
+		private static bool SetCursor(this DbParameter p, object value)
 		{
 			p.SetRuntimeEnumProperty("NpgsqlDbType", "Refcursor");
 			p.Value = value;
@@ -277,26 +294,9 @@ namespace Massive
 		/// </summary>
 		/// <param name="p">The parameter.</param>
 		/// <returns>true if this is a cursor parameter.</returns>
-		public static bool IsCursor(this DbParameter p)
+		private static bool IsCursor(this DbParameter p)
 		{
 			return p.GetRuntimeEnumProperty("NpgsqlDbType") == "Refcursor";
-		}
-
-
-		/// <summary>
-		/// Returns true if this command requires a wrapping transaction.
-		/// </summary>
-		/// <param name="cmd">The command.</param>
-		/// <returns>true if it requires a wrapping transaction</returns>
-		/// <remarks>
-		/// Only relevant to Postgres cursor commands and in this case we do some relevant pre-processing of the command too.
-		/// </remarks>
-		public static bool RequiresWrappingTransaction(this DbCommand cmd)
-		{
-			// If we've got cursor parameters these are actually just placeholders to kick off cursor support (i.e. the wrapping transaction); we need to remove them before executing the command.
-			bool isCursorCommand = false;
-			cmd.Parameters.Cast<DbParameter>().Where(p => p.IsCursor()).ToList().ForEach(p => { isCursorCommand = true; cmd.Parameters.Remove(p); });
-			return isCursorCommand;
 		}
 
 
