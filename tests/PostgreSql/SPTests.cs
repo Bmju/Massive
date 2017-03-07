@@ -129,8 +129,6 @@ namespace Massive.Tests.Oracle
 		public void ProvideValueToInputOutputParam()
 		{
 			var db = new SPTestsDatabase();
-			dynamic wArgs = new ExpandoObject();
-			wArgs.w = null;
 			// w := w + 2; v := w - 1; x := w + 1
 			dynamic testResult = db.ExecuteAsProcedure("test_vars", ioParams: new { w = 2 }, outParams: new { v = 0, x = 0 });
 			Assert.AreEqual(3, testResult.v);

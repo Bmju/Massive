@@ -109,7 +109,7 @@ namespace Massive
 				// Some ADO.NET providers completely ignore the parameter DbType when deciding on the .NET type for return values, others do not
 				else if(direction != ParameterDirection.Input && !p.IgnoresOutputTypes())
 				{
-					throw new InvalidOperationException("Parameter \"" + p.ParameterName + "\" - on this ADO.NET provider all output, input-output and return parameters require non-null value or fully typed property, to allow correct sql parameter type to be inferred");
+					throw new InvalidOperationException("Parameter \"" + p.ParameterName + "\" - on this ADO.NET provider all output, input-output and return parameters require non-null value or fully typed property, to allow correct SQL parameter type to be inferred");
 				}
 				p.Value = DBNull.Value;
 			}

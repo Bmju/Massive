@@ -117,17 +117,32 @@ namespace Massive.Tests.Oracle
 			Assert.AreEqual(1, counts[1]);
 		}
 
-		//// TO DO: Implement this test fn, which is currently on Postgres
-		//public void InputOutputParam()
-		//{
-		//	////dynamic testResult = db.ExecuteAsProcedure("test_vars", ioParams: new { w = 0 }, outParams: new { x = 0, p2 = 0 });
-		//}
+		public class wArgs
+		{
+			public int? w { get; set; }
+		}
 
-		//// TO DO: Implement this test fn, which is currently on Postgres
-		//public void InitialNulInputOutputParam()
-		//{
-		//	////dynamic testResult = db.ExecuteAsProcedure("test_vars", ioParams: new { w = 0 }, outParams: new { x = 0, p2 = 0 });
-		//}
+		[Test]
+		public void DefaultValueFromNullInputOutputParam()
+		{
+			var db = new SPTestsDatabase();
+			// w := w + 2; v := w - 1; x := w + 1
+			dynamic testResult = db.ExecuteAsProcedure("TestVars", ioParams: new wArgs(), outParams: new { v = 0, x = 0 });
+			Assert.AreEqual(1, testResult.v);
+			Assert.AreEqual(2, testResult.w);
+			Assert.AreEqual(3, testResult.x);
+		}
+
+		[Test]
+		public void ProvideValueToInputOutputParam()
+		{
+			var db = new SPTestsDatabase();
+			// w := w + 2; v := w - 1; x := w + 1
+			dynamic testResult = db.ExecuteAsProcedure("TestVars", ioParams: new { w = 2 }, outParams: new { v = 0, x = 0 });
+			Assert.AreEqual(3, testResult.v);
+			Assert.AreEqual(4, testResult.w);
+			Assert.AreEqual(5, testResult.x);
+		}
 
 		//[Test]
 		//public void ScalarFromProcedure()
