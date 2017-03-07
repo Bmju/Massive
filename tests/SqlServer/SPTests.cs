@@ -144,6 +144,50 @@ namespace Massive.Tests.Oracle
 			Assert.AreEqual(5, testResult.x);
 		}
 
+		/// <remarks>
+		/// There is no such thing as a Cursor SqlDbType for SqlParameter in System.Data.SqlClient (unlike in Oracle and PostgreSQL).
+		/// In T-SQL a cursor is not for passing references to result sets around (T-SQL does that automatically) it is JUST for single
+		/// stepping through a result set, and it would be an even worse idea to do that controlled from C#, if it was possible to.
+		/// </remarks>
+		[Test]
+		public void DereferenceCursor()
+		{
+			// There is probably no situation in which it would make sense to do this (a procedure returning a cursor should be for use by another
+			// procedure only - if at all); the remarks above and the example immediately below document why this is the wrong thing to do.
+			var db = new SPTestsDatabase();
+			var SQL = "DECLARE @MyCursor CURSOR;\r\n" +
+					  "EXEC dbo.uspCurrencyCursor @CurrencyCursor = @MyCursor OUTPUT;\r\n" +
+					  "WHILE(@@FETCH_STATUS = 0)\r\n" +
+					  "BEGIN;\r\n" +
+					  "\tFETCH NEXT FROM @MyCursor;\r\n" +
+					  "END;\r\n" +
+					  "CLOSE @MyCursor;\r\n" +
+					  "DEALLOCATE @MyCursor;\r\n";
+			dynamic resultSets = db.QueryMultiple(SQL);
+			int count = 0;
+			foreach(var results in resultSets)
+			{
+				foreach(var item in results)
+				{
+					count++;
+					Assert.AreEqual(typeof(string), item.CurrencyCode.GetType());
+					Assert.AreEqual(typeof(string), item.Name.GetType());
+				}
+			}
+			Assert.AreEqual(105, count);
+
+			// An example of the correct way to do it
+			dynamic fastResults = db.QueryFromProcedure("uspCurrencySelect");
+			int fastCount = 0;
+			foreach(var item in fastResults)
+			{
+				fastCount++;
+				Assert.AreEqual(typeof(string), item.CurrencyCode.GetType());
+				Assert.AreEqual(typeof(string), item.Name.GetType());
+			}
+			Assert.AreEqual(105, fastCount);
+		}
+
 		//[Test]
 		//public void ScalarFromProcedure()
 		//{

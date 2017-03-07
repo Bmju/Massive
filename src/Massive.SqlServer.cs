@@ -70,6 +70,11 @@ namespace Massive
 		/// <param name="p">The parameter.</param>
 		/// <param name="value">Object reference to an existing cursor from a previous output or return direction cursor parameter, or null.</param>
 		/// <returns>Returns false if not supported on this provider.</returns>
+		/// <remarks>
+		/// There is no such thing as a Cursor SqlDbType for SqlParameter in System.Data.SqlClient (unlike in Oracle and PostgreSQL, for example).
+		/// In T-SQL a cursor is not for passing references to result sets around (T-SQL does that automatically) it is JUST for single
+		/// stepping through a result set, and it would be an even worse idea to do that controlled from C#, if it was possible to.
+		/// </remarks>
 		private static bool SetCursor(this DbParameter p, object value)
 		{
 			return false;
