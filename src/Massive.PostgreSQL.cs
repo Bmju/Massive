@@ -53,12 +53,20 @@ namespace Massive
 		/// <summary>
 		/// Create a safe, sensible dereferencing reader; we have already checked that there are at least some cursors to dereference at this point.
 		/// </summary>
-		/// <param name="reader">The reader for the undereferenced query.</param>
+		/// <param name="reader">The original reader for the undereferenced query.</param>
 		/// <param name="connection">The connection to use.</param>
-		/// <param name="db">We need this just for the DbCommand factory.</param>
+		/// <param name="db">We need this for the DbCommand factory.</param>
+		/// <param name="fetchSize">Batch fetch size; zero or negative value will FETCH ALL from each cursor.</param>
+		/// <remarks>
+		/// FETCH ALL is genuinely useful in some situations (e.g. if using (abusing?) cursors to return small or medium sized multiple result
+		/// sets then we can and do save one round trip to the database overall: n cursors round trips, rather than n cursors plus one), but since
+		/// it is badly problematic in the case of large cursors we force the user to request it explicitly.
+		/// https://github.com/npgsql/npgsql/issues/438
+		/// http://stackoverflow.com/questions/42292341/
+		/// </remarks>
 		internal NpgsqlDereferencingReader(DbDataReader reader, DbConnection connection, DynamicModel db, int fetchSize)
 		{
-			FetchSize = fetchSize; // <= 0 will do FETCH ALL (may be genuinely useful in some situations, but user has to request this explicitly)
+			FetchSize = fetchSize;
 			Connection = connection;
 			Db = db;
 
@@ -83,6 +91,24 @@ namespace Massive
 		}
 
 		/// <summary>
+		/// SQL to fetch required count from current cursor
+		/// </summary>
+		/// <returns>SQL</returns>
+		private string FetchSQL()
+		{
+			return string.Format(@"FETCH {0} FROM ""{1}"";", (FetchSize <= 0 ? "ALL" : FetchSize.ToString()), Cursor);
+		}
+
+		/// <summary>
+		/// SQL to close current cursor
+		/// </summary>
+		/// <returns>SQL</returns>
+		private string CloseSQL()
+		{
+			return string.Format(@"CLOSE ""{0}"";", Cursor);
+		}
+
+		/// <summary>
 		/// Close current FETCH cursor on the database
 		/// </summary>
 		/// <param name="ExecuteNow">Iff false then return the SQL but don't execute the command</param>
@@ -90,17 +116,15 @@ namespace Massive
 		private string CloseCursor(bool ExecuteNow = true)
 		{
 			// close and dispose current fetch reader for this cursor
-			if(Reader != null)
+			if(Reader != null && !Reader.IsClosed)
 			{
 				Reader.Close();
 				Reader.Dispose();
-				// not nulling Reader so that it still exists to pass on all the other override calls;
-				// seems okay to close/dispose multiple times, if not we could not null Reader but add code to avoid this
 			}
 			// close cursor itself
-			if(!string.IsNullOrEmpty(Cursor))
+			if(FetchSize > 0 && !string.IsNullOrEmpty(Cursor))
 			{
-				var closeSql = string.Format(@"CLOSE ""{0}"";", Cursor);
+				var closeSql = CloseSQL();
 				if(!ExecuteNow)
 				{
 					return closeSql;
@@ -116,17 +140,19 @@ namespace Massive
 		/// <summary>
 		/// Fetch next N rows from current cursor
 		/// </summary>
-		/// <param name="closeSql">SQL to prepend, to close the previous cursor in a single round trip (optional)</param>
-		private void FetchNextNFromCursor(string closeSql = "")
+		/// <param name="closePreviousSQL">SQL to prepend, to close the previous cursor in a single round trip (optional)</param>
+		private void FetchNextNFromCursor(string closePreviousSQL = "")
 		{
 			// close and dispose previous fetch reader for this cursor
-			if(Reader != null)
+			if(Reader != null && !Reader.IsClosed)
 			{
 				Reader.Close();
 				Reader.Dispose();
 			}
-			// fetch next n from cursor (optionally close previous cursor first)
-			var fetchCmd = Db.CreateCommand(closeSql + string.Format(@"FETCH {0} FROM ""{1}"";", (FetchSize <= 0 ? "ALL" : FetchSize.ToString()), Cursor), Connection); // new NpgsqlCommand(..., Connection);
+			// fetch next n from cursor;
+			// optionally close previous cursor;
+			// iff we're fetching all, we can close this cursor in this command
+			var fetchCmd = Db.CreateCommand(closePreviousSQL + FetchSQL() + (FetchSize <= 0 ? CloseSQL() : ""), Connection); // new NpgsqlCommand(..., Connection);
 			Reader = fetchCmd.ExecuteReader(CommandBehavior.SingleResult);
 			Count = 0;
 		}
@@ -195,8 +221,11 @@ namespace Massive
 					Count++;
 					return true;
 				}
-				// if rows expired before requested count, there is nothing more to fetch on this cursor
-				if(FetchSize <= 0 || Count < FetchSize) return false;
+				// if we did FETCH ALL or if rows expired before requested count, there is nothing more to fetch on this cursor
+				if(FetchSize <= 0 || Count < FetchSize)
+				{
+					return false;
+				}
 			}
 			// if rows expired at requested count, there may or may not be more rows
 			FetchNextNFromCursor();
@@ -590,7 +619,12 @@ namespace Massive
 
 		/// <summary>
 		/// The number of rows to fetch at once when dereferencing cursors.
+		/// Set to zero or negative for FETCH ALL, but use with care this will cause huge PostgreSQL server-side buffering on large cursors.
 		/// </summary>
+		/// <remarks>
+		/// This is large enough to get the data back reasonably quickly for most users, but might be too large for an application
+		/// which requires multiple large cursors open at once.
+		/// </remarks>
 		public int AutoDereferenceFetchSize { get; set; } = 10000;
 		#endregion
 	}
