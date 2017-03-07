@@ -97,6 +97,7 @@ namespace Massive.Tests.Oracle
 		public void InitialNullDateReturnParamMethod1()
 		{
 			var db = new SPTestsDatabase();
+			// This method will work on any provider
 			dynamic dateResult = db.ExecuteAsProcedure("get_date", returnParams: new dateNullParam());
 			Assert.AreEqual(typeof(DateTime), dateResult.d.GetType());
 		}
@@ -113,13 +114,43 @@ namespace Massive.Tests.Oracle
 		}
 
 		[Test]
-		public void DefaultValueFromNullInputOutputParam()
+		public void InitialNullDateReturnParamMethod3()
 		{
 			var db = new SPTestsDatabase();
+			// Look - it REALLY ignores the parameter type. This would not work on other ADO.NET providers.
+			// (Look at per-DB method: `private static bool IgnoresOutputTypes(this DbParameter p);`)
+			dynamic dParam = new ExpandoObject();
+			dParam.d = false;
+			dynamic dateResult = db.ExecuteAsProcedure("get_date", returnParams: dParam);
+			Assert.AreEqual(typeof(DateTime), dateResult.d.GetType());
+		}
+
+		[Test]
+		public void DefaultValueFromNullInputOutputParam_Npgsql()
+		{
+			var db = new SPTestsDatabase();
+			// NB This would not work on other ADO.NET providers.
 			dynamic wArgs = new ExpandoObject();
 			wArgs.w = null;
 			// w := w + 2; v := w - 1; x := w + 1
 			dynamic testResult = db.ExecuteAsProcedure("test_vars", ioParams: wArgs, outParams: new { v = 0, x = 0 });
+			Assert.AreEqual(1, testResult.v);
+			Assert.AreEqual(2, testResult.w);
+			Assert.AreEqual(3, testResult.x);
+		}
+
+		public class wArgs
+		{
+			public int? w { get; set; }
+		}
+
+		[Test]
+		public void DefaultValueFromNullInputOutputParam_CrossDb()
+		{
+			// This is the cross-DB compatible way to do it.
+			var db = new SPTestsDatabase();
+			// w := w + 2; v := w - 1; x := w + 1
+			dynamic testResult = db.ExecuteAsProcedure("test_vars", ioParams: new wArgs(), outParams: new { v = 0, x = 0 });
 			Assert.AreEqual(1, testResult.v);
 			Assert.AreEqual(2, testResult.w);
 			Assert.AreEqual(3, testResult.x);
