@@ -129,7 +129,7 @@ namespace Massive
 		{
 			p.Value = value;
 			var valueAsString = value as string;
-			if (valueAsString != null)
+			if(valueAsString != null)
 			{
 				p.Size = valueAsString.Length > 4000 ? -1 : 4000;
 			}
