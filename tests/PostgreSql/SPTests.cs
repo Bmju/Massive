@@ -363,6 +363,51 @@ namespace Massive.Tests.Oracle
 			}
 		}
 
+		/// <summary>
+		/// For NX1 cursors above Execute gets the raw cursors. For 1XN we have to query without automatic dereferencing.
+		/// </summary>
+		[Test]
+		public void InputCursors_1XN()
+		{
+			var db = new SPTestsDatabase();
+			db.AutoDereferenceCursors = false; // for this instance only
+
+			// cursors in PostgreSQL must share a transaction (not just a connection, as in Oracle)
+			// to use TransactionScope with Npgsql, the connection string must include "Enlist=true;"
+			using(var scope = new TransactionScope())
+			{
+				// Including a cursor param is optional and makes no difference, because Npgsql/PostgreSQL is lax about such things
+				// and we don't need to hint to Massive to do anything special 
+				var cursors = db.QueryFromProcedure("cursorOneByN", outParams: new { abcdef = new Cursor() });
+				string[] cursor = new string[2];
+				int i = 0;
+				foreach(var item in cursors)
+				{
+					cursor[i++] = item.cursoronebyn;
+				}
+				Assert.AreEqual(2, i);
+				var cursor1 = db.QueryFromProcedure("fetch_next_ints_from_cursor", new { mycursor = new Cursor(cursor[0]) });
+				int count1 = 0;
+				foreach(var item in cursor1)
+				{
+					Assert.AreEqual(1, item.myint1);
+					Assert.AreEqual(2, item.myint2);
+					count1++;
+				}
+				Assert.AreEqual(1, count1);
+				var cursor2 = db.QueryFromProcedure("fetch_next_ints_from_cursor", new { mycursor = new Cursor(cursor[1]) });
+				int count2 = 0;
+				foreach(var item in cursor2)
+				{
+					Assert.AreEqual(3, item.myint1);
+					Assert.AreEqual(4, item.myint2);
+					count2++;
+				}
+				Assert.AreEqual(1, count2);
+				scope.Complete();
+			}
+		}
+
 		readonly int LargeCursorSize = 1000000;
 
 		/// <summary>
