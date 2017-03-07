@@ -213,6 +213,8 @@ namespace Massive.Tests.Oracle
 		public void DereferenceNByOneFromProcedure()
 		{
 			var db = new SPTestsDatabase();
+			// For small result sets, this actually saves one round trip to the database
+			//db.AutoDereferenceFetchSize = -1;
 			var resultSetNByOne = db.QueryMultipleFromProcedure("cursorNByOne", outParams: new { c1 = new Cursor(), c2 = new Cursor() });
 			CheckMultiResultSetStructure(resultSetNByOne);
 		}
@@ -264,6 +266,126 @@ namespace Massive.Tests.Oracle
 			var itemCursorMix = db.ExecuteAsProcedure("cursor_mix", outParams: new { anyname = new Cursor(), othername = 0 });
 			Assert.AreEqual(42, itemCursorMix.othername);
 			Assert.AreEqual(typeof(string), itemCursorMix.anyname.GetType()); // NB PostgreSql ref cursors return as string
+		}
+
+		[Test]
+		public void InputCursors()
+		{
+			var db = new SPTestsDatabase();
+			using(var conn = db.OpenConnection())
+			{
+				// cursors in PostgreSQL must share a transaction (not just a connection, as in Oracle)
+				using(var trans = conn.BeginTransaction())
+				{
+					var cursors = db.ExecuteAsProcedure("cursorNByOne", outParams: new { c1 = new Cursor(), c2 = new Cursor() }, connection: conn);
+					var cursor1 = db.QueryFromProcedure("fetch_next_ints_from_cursor", new { mycursor = new Cursor(cursors.c1) }, connection: conn);
+					int count1 = 0;
+					foreach(var item in cursor1)
+					{
+						Assert.AreEqual(11, item.myint1);
+						Assert.AreEqual(22, item.myint2);
+						count1++;
+					}
+					Assert.AreEqual(1, count1);
+					var cursor2 = db.QueryFromProcedure("fetch_next_ints_from_cursor", new { mycursor = new Cursor(cursors.c2) }, connection: conn);
+					int count2 = 0;
+					foreach(var item in cursor2)
+					{
+						Assert.AreEqual(33, item.myint1);
+						Assert.AreEqual(44, item.myint2);
+						count2++;
+					}
+					Assert.AreEqual(1, count2);
+				}
+			}
+		}
+
+		readonly int LargeCursorSize = 1000000;
+
+		/// <summary>
+		/// Explicit dereferencing is more fiddly to do, but you still have the choice to do it (even when automatic dereferencing is on).
+		/// </summary>
+		[Test]
+		public void LargeCursor_ExplicitFetch()
+		{
+			int FetchSize = 20000;
+			int count = 0;
+			int batchCount = 0;
+			var db = new SPTestsDatabase();
+			using(var conn = db.OpenConnection())
+			{
+				// cursors in PostgreSQL must share a transaction (not just a connection, as in Oracle)
+				using(var trans = conn.BeginTransaction())
+				{
+					var result = db.ExecuteAsProcedure("lump", returnParams: new { cname = new Cursor() }, connection: conn);
+					while(true)
+					{
+						var fetchTest = db.QueryWithParams($@"FETCH {FetchSize} FROM ""{result.cname}""", connection: conn);
+						int subcount = 0;
+						foreach(var item in fetchTest)
+						{
+							count++;
+							subcount++;
+							Assert.AreEqual(count, item.id);
+						}
+						if(subcount == 0)
+						{
+							break;
+						}
+						batchCount++;
+					}
+					db.Execute($@"CLOSE ""{result.cname}""", connection: conn);
+					trans.Commit();
+				}
+			}
+			Assert.AreEqual((LargeCursorSize + FetchSize - 1) / FetchSize, batchCount);
+			Assert.AreEqual(LargeCursorSize, count);
+		}
+
+		/// <remarks>
+		/// Implicit dereferencing is much easier to do, but also safe even for large or huge cursors.
+		/// PostgreSQL specific settings; the following are the defaults which should work fine for most situations:
+		/// 	db.AutoDereferenceCursors = true;
+		/// 	db.AutoDereferenceFetchSize = 10000;
+		/// </remarks>
+		[Test]
+		public void LargeCursor_AutomaticDereferencing()
+		{
+			var db = new SPTestsDatabase();
+			// Either of these will show big server-side buffers in PostrgeSQL logs (but will still pass)
+			//db.AutoDereferenceFetchSize = -1; // FETCH ALL
+			//db.AutoDereferenceFetchSize = 400000;
+			var fetchTest = db.QueryFromProcedure("lump", returnParams: new { cname = new Cursor() });
+			int count = 0;
+			foreach(var item in fetchTest)
+			{
+				count++;
+				Assert.AreEqual(count, item.id);
+			}
+			Assert.AreEqual(LargeCursorSize, count);
+		}
+
+		[Test]
+		public void LargeCursorX2_AutomaticDereferencing()
+		{
+			var db = new SPTestsDatabase();
+			// Either of these will show big server-side buffers in PostrgeSQL logs (but will still pass)
+			//db.AutoDereferenceFetchSize = -1; // FETCH ALL
+			//db.AutoDereferenceFetchSize = 400000;
+			var results = db.QueryMultipleFromProcedure("lump2", returnParams: new { cname = new Cursor() });
+			int rcount = 0;
+			foreach (var result in results)
+			{
+				rcount++;
+				int count = 0;
+				foreach(var item in result)
+				{
+					count++;
+					Assert.AreEqual(count, item.id);
+				}
+				Assert.AreEqual(LargeCursorSize, count);
+			}
+			Assert.AreEqual(2, rcount);
 		}
 
 #if false
