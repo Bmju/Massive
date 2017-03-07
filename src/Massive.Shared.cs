@@ -105,6 +105,10 @@ namespace Massive
 				if(type != null)
 				{
 					p.SetValue(type.CreateInstance());
+					// explicitly lock type and size to the values which ADO.NET has just implicitly assigned
+					// (when only implictly assigned, setting Value to DBNull.Value later on causes these to reset, in at least the Npgsql and SQL Server providers)
+					p.DbType = p.DbType;
+					p.Size = p.Size;
 				}
 				// Some ADO.NET providers completely ignore the parameter DbType when deciding on the .NET type for return values, others do not
 				else if(direction != ParameterDirection.Input && !p.IgnoresOutputTypes())

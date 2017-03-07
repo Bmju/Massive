@@ -138,10 +138,6 @@ namespace Massive
 			{
 				p.Size = valueAsString.Length > 4000 ? -1 : 4000;
 			}
-			// explicitly set type and size to the implicitly assigned values
-			// (when only implictly assigned, setting Value to DBNull.Value later on causes these to reset, in the SQL Server provider)
-			p.DbType = p.DbType;
-			p.Size = p.Size;
 		}
 	}
 
