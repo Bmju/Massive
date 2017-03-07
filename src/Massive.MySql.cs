@@ -57,8 +57,9 @@ namespace Massive
 		/// Returns true if this command requires a wrapping transaction.
 		/// </summary>
 		/// <param name="cmd">The command.</param>
+		/// <param name="db">The dynamic model, to access config params.</param>
 		/// <returns>true if it requires a wrapping transaction</returns>
-		internal static bool RequiresWrappingTransaction(this DbCommand cmd)
+		internal static bool RequiresWrappingTransaction(this DbCommand cmd, DynamicModel db)
 		{
 			return false;
 		}

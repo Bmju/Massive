@@ -364,7 +364,8 @@ namespace Massive.Tests.Oracle
 		}
 
 		/// <summary>
-		/// For NX1 cursors above Execute gets the raw cursors. For 1XN we have to query without automatic dereferencing.
+		/// For NX1 cursors as above Execute can get the raw cursors.
+		/// For 1XN as here we have to use Query with automatic dereferencing turned off.
 		/// </summary>
 		[Test]
 		public void InputCursors_1XN()
@@ -378,7 +379,7 @@ namespace Massive.Tests.Oracle
 			{
 				// Including a cursor param is optional and makes no difference, because Npgsql/PostgreSQL is lax about such things
 				// and we don't need to hint to Massive to do anything special 
-				var cursors = db.QueryFromProcedure("cursorOneByN", outParams: new { abcdef = new Cursor() });
+				var cursors = db.QueryFromProcedure("cursorOneByN"); //, outParams: new { abcdef = new Cursor() });
 				string[] cursor = new string[2];
 				int i = 0;
 				foreach(var item in cursors)

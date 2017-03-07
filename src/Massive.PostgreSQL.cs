@@ -291,18 +291,21 @@ namespace Massive
 		/// Returns true if this command requires a wrapping transaction.
 		/// </summary>
 		/// <param name="cmd">The command.</param>
+		/// <param name="db">The dynamic model, to access config params.</param>
 		/// <returns>true if it requires a wrapping transaction</returns>
 		/// <remarks>
-		/// Only relevant to Postgres cursor dereferencing and in this case we do some relevant pre-processing of the command too.
+		/// Only relevant to Postgres cursor dereferencing and in this case we also do some relevant pre-processing of the command.
 		/// </remarks>
-		internal static bool RequiresWrappingTransaction(this DbCommand cmd)
+		internal static bool RequiresWrappingTransaction(this DbCommand cmd, DynamicModel db)
 		{
+			if (!db.AutoDereferenceCursors)
+			{
+				// Do not request wrapping transaction if auto-dereferencing is off
+				return false;
+			}
 			// If we've got cursor parameters these are actually just placeholders to kick off cursor support (i.e. the wrapping transaction); we need to remove them before executing the command.
 			bool isCursorCommand = false;
 			cmd.Parameters.Cast<DbParameter>().Where(p => p.IsCursor()).ToList().ForEach(p => { isCursorCommand = true; cmd.Parameters.Remove(p); });
-			// TO DO: ideally would not request wrapping transaction if auto-dereferencing is off
-			// but this is an edge case which works even with this extra transaction.
-			// (Info may be accessible in DbCommand if/when dereferencing goes back into Npgsql.)
 			return isCursorCommand;
 		}
 

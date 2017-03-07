@@ -729,7 +729,7 @@ namespace Massive
 			{
 				var cmd = CreateCommandWithNamedParams(sql, inParams, outParams, ioParams, returnParams, isProcedure, connection ?? localConn);
 				// manage wrapping transaction if required, and if we have not been passed an incoming connection
-				using(var trans = ((connection == null && Transaction.Current == null && cmd.RequiresWrappingTransaction()) ? localConn.BeginTransaction() : null))
+				using(var trans = ((connection == null && Transaction.Current == null && cmd.RequiresWrappingTransaction(this)) ? localConn.BeginTransaction() : null))
 				{
 					// TO DO: Apply single result hint when appropriate (once Npgsql is dereferencing for us)
 					using(var rdr = cmd.ExecuteDereferencingReader(connection ?? localConn, this))
