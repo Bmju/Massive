@@ -35,6 +35,7 @@ using System.Data.Common;
 using System.Dynamic;
 using System.Linq;
 using System.Reflection;
+using System.Transactions;
 
 namespace Massive
 {
@@ -723,7 +724,8 @@ namespace Massive
 			using(var localConn = (connection == null ? OpenConnection() : null))
 			{
 				var cmd = CreateCommandWithNamedParams(sql, inParams, outParams, ioParams, returnParams, isProcedure, connection ?? localConn);
-				using(var trans = ((connection == null && cmd.RequiresWrappingTransaction()) ? localConn.BeginTransaction() : null))
+				// manage wrapping transaction if required, and if we have not been passed an incoming connection
+				using(var trans = ((connection == null && Transaction.Current == null && cmd.RequiresWrappingTransaction()) ? localConn.BeginTransaction() : null))
 				{
 					// TO DO: Apply single result hint when appropriate (once Npgsql is dereferencing for us)
 					using(var rdr = cmd.ExecuteDereferencingReader(connection ?? localConn, this))

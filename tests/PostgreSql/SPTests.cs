@@ -4,6 +4,7 @@ using System.Dynamic;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Transactions;
 using PostgreSql.TableClasses;
 using NUnit.Framework;
 using SD.Tools.OrmProfiler.Interceptor;
@@ -269,7 +270,7 @@ namespace Massive.Tests.Oracle
 		}
 
 		[Test]
-		public void InputCursors()
+		public void InputCursors_BeginTransaction()
 		{
 			var db = new SPTestsDatabase();
 			using(var conn = db.OpenConnection())
@@ -296,7 +297,40 @@ namespace Massive.Tests.Oracle
 						count2++;
 					}
 					Assert.AreEqual(1, count2);
+					trans.Commit();
 				}
+			}
+		}
+
+		[Test]
+		public void InputCursors_TransactionScope()
+		{
+			var db = new SPTestsDatabase();
+
+			// cursors in PostgreSQL must share a transaction (not just a connection, as in Oracle)
+			// to use TransactionScope with Npgsql, the connection string must include "Enlist=true;"
+			using(var scope = new TransactionScope())
+			{
+				var cursors = db.ExecuteAsProcedure("cursorNByOne", outParams: new { c1 = new Cursor(), c2 = new Cursor() });
+				var cursor1 = db.QueryFromProcedure("fetch_next_ints_from_cursor", new { mycursor = new Cursor(cursors.c1) });
+				int count1 = 0;
+				foreach(var item in cursor1)
+				{
+					Assert.AreEqual(11, item.myint1);
+					Assert.AreEqual(22, item.myint2);
+					count1++;
+				}
+				Assert.AreEqual(1, count1);
+				var cursor2 = db.QueryFromProcedure("fetch_next_ints_from_cursor", new { mycursor = new Cursor(cursors.c2) });
+				int count2 = 0;
+				foreach(var item in cursor2)
+				{
+					Assert.AreEqual(33, item.myint1);
+					Assert.AreEqual(44, item.myint2);
+					count2++;
+				}
+				Assert.AreEqual(1, count2);
+				scope.Complete();
 			}
 		}
 
