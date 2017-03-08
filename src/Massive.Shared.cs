@@ -771,13 +771,24 @@ namespace Massive
 		/// <returns>first value returned from the query executed or null of no result was returned by the database.</returns>
 		public virtual object Scalar(string sql, params object[] args)
 		{
-			object result;
-			using(var conn = OpenConnection())
-			{
-				result = CreateCommand(sql, conn, args).ExecuteScalar();
-				conn.Close();
-			}
-			return result;
+			return ScalarWithParams(sql, args: args);
+		}
+
+
+		/// <summary>
+		/// Returns a single result by executing the passed in query + parameters as a scalar query.
+		/// </summary>
+		/// <param name="sql">The SQL to execute as a scalar command.</param>
+		/// <param name="inParams">Input parameters (optional). Names and values are used.</param>
+		/// <param name="outParams">Output parameters (optional). Names are used. Values are used to determine parameter type.</param>
+		/// <param name="ioParams">Input-output parameters (optional). Names and values are used.</param>
+		/// <param name="returnParams">Return parameters (optional). Names are used. Values are used to determine parameter type.</param>
+		/// <param name="connection">The connection to use (optional), has to be open if present.</param>
+		/// <param name="args">Traditional Massive auto-named arguments, if present these are added before the named params.</param>
+		/// <returns>first value returned from the query executed or null of no result was returned by the database.</returns>
+		public virtual object ScalarWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, DbConnection connection = null, params object[] args)
+		{
+			return ExecuteWithParams(sql, inParams, outParams, ioParams, returnParams, false, true, connection, args);
 		}
 
 
@@ -850,7 +861,7 @@ namespace Massive
 		/// <returns>Dynamic containing return values of all non-input parameters.</returns>
 		public virtual dynamic ExecuteAsProcedure(string spName, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, DbConnection connection = null)
 		{
-			return ExecuteWithParams(spName, inParams, outParams, ioParams, returnParams, true, connection);
+			return ExecuteWithParams(spName, inParams, outParams, ioParams, returnParams, true, false, connection);
 		}
 
 
@@ -864,21 +875,30 @@ namespace Massive
 		/// <param name="ioParams">Input-output parameters (optional). Names and values are used.</param>
 		/// <param name="returnParams">Return parameters (optional). Names are used. Values are used to determine parameter type.</param>
 		/// <param name="isProcedure">Whether to execute the command as stored procedure or general SQL. Defaults to general SQL.</param>
-		/// <param name="connection">The connection to use, has to be open.</param>
+		/// <param name="isScalar">Whether to execute the command as a scalar or not. Defaults to not.</param>
+		/// <param name="connection">The connection to use (optional), has to be open if present.</param>
+		/// <param name="args">Traditional Massive auto-named arguments, if present these are added before the named params.</param>
 		/// <returns>Dynamic holding return values of any output, input-output and return parameters.</returns>
-		public dynamic ExecuteWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false, DbConnection connection = null)
+		public dynamic ExecuteWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false, bool isScalar = false, DbConnection connection = null, params object[] args)
 		{
-			dynamic result = new ExpandoObject();
 			using(var localConn = (connection == null ? OpenConnection() : null))
 			{
-				var cmd = CreateCommandWithNamedParams(sql, inParams, outParams, ioParams, returnParams, isProcedure, connection ?? localConn);
-				cmd.ExecuteNonQuery();
-				var resultDictionary = (IDictionary<string, object>)result;
-				cmd.AddParamValuesToResult(outParams, resultDictionary);
-				cmd.AddParamValuesToResult(ioParams, resultDictionary);
-				cmd.AddParamValuesToResult(returnParams, resultDictionary);
+				var cmd = CreateCommandWithNamedParams(sql, inParams, outParams, ioParams, returnParams, isProcedure, connection ?? localConn, args);
+				if(isScalar)
+				{
+					return cmd.ExecuteScalar();
+				}
+				else
+				{
+					dynamic result = new ExpandoObject();
+					cmd.ExecuteNonQuery();
+					var resultDictionary = (IDictionary<string, object>)result;
+					cmd.AddParamValuesToResult(outParams, resultDictionary);
+					cmd.AddParamValuesToResult(ioParams, resultDictionary);
+					cmd.AddParamValuesToResult(returnParams, resultDictionary);
+					return result;
+				}
 			}
-			return result;
 		}
 
 
@@ -937,7 +957,22 @@ namespace Massive
 		/// <returns>streaming enumerable with expandos, one for each row read</returns>
 		public virtual IEnumerable<dynamic> All(string where = "", string orderBy = "", int limit = 0, string columns = "*", params object[] args)
 		{
-			return Query(string.Format(BuildSelectQueryPattern(where, orderBy, limit), columns, TableName), args);
+			return QueryNWithParams<dynamic>(string.Format(BuildSelectQueryPattern(where, orderBy, limit), columns, TableName), args: args);
+		}
+
+
+		/// <summary>
+		/// Returns all records complying with the passed-in WHERE clause and arguments, ordered as specified, limited by limit specified using the DB specific limit system.
+		/// </summary>
+		/// <param name="where">The where clause. Default is empty string. Parameters have to be numbered starting with 0, for each value in args.</param>
+		/// <param name="orderBy">The order by clause. Default is empty string.</param>
+		/// <param name="limit">The limit. Default is 0 (no limit).</param>
+		/// <param name="columns">The columns to use in the project. Default is '*' (all columns, in table defined order).</param>
+		/// <param name="args">The values to use as parameters.</param>
+		/// <returns>streaming enumerable with expandos, one for each row read</returns>
+		public virtual IEnumerable<dynamic> AllWithParams(string where = "", string orderBy = "", int limit = 0, string columns = "*", object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, DbConnection connection = null, params object[] args)
+		{
+			return QueryNWithParams<dynamic>(string.Format(BuildSelectQueryPattern(where, orderBy, limit), columns, TableName), inParams, outParams, ioParams, returnParams, false, connection, args);
 		}
 
 
@@ -978,11 +1013,16 @@ namespace Massive
 
 
 		/// <summary>
-		/// Returns a single row from the database
+		/// Returns a single row from the database (note: another version of Single with `where`, `columns` and `args` is available if dynamically invoked).
 		/// </summary>
 		/// <param name="where">The where clause.</param>
 		/// <param name="args">The arguments.</param>
 		/// <returns></returns>
+		/// <remarks>
+		/// A `string columns` argument cannot be added here (nor in a new overload) without breaking existing code which is using Massive;
+		/// however a variant of Single with `where`, `columns` and `args` is now available if dynamically invoked:
+		/// `((dynamic)db).Single(where: "last_name = @0", columns: "first_name, last_name", args: "smith")`.
+		/// </remarks>
 		public virtual dynamic Single(string where, params object[] args)
 		{
 			return All(where, limit: 1, args: args).FirstOrDefault();
@@ -1260,9 +1300,30 @@ namespace Massive
 		/// </remarks>
 		public int Count(string tableName = "", string where = "", params object[] args)
 		{
+			return CountWithParams(tableName, where, args: args);
+		}
+
+
+		/// <summary>
+		/// Executes a Count(*) query on the Tablename specified using the where clause specified
+		/// </summary>
+		/// <param name="tableName">Name of the table to execute the count query on. By default it's this table's name</param>
+		/// <param name="where">The where clause. Default is empty string. Parameters have to be numbered starting with 0, for each value in args.</param>
+		/// <param name="inParams">Input parameters (optional). Names and values are used.</param>
+		/// <param name="outParams">Output parameters (optional). Names are used. Values are used to determine parameter type.</param>
+		/// <param name="ioParams">Input-output parameters (optional). Names and values are used.</param>
+		/// <param name="returnParams">Return parameters (optional). Names are used. Values are used to determine parameter type.</param>
+		/// <param name="connection">The connection to use (optional), has to be open if present.</param>
+		/// <param name="args">The parameters used in the where clause.</param>
+		/// <returns>number of rows returned after executing the count query</returns>
+		/// <remarks>
+		/// In order to retain cross-DB compatibility we are coercing long values (e.g. MySql) to int values, note that a simple cast would always exception regardless of the value.
+		/// </remarks>
+		public int CountWithParams(string tableName = "", string where = "", object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, DbConnection connection = null, params object[] args)
+		{
 			var scalarQueryPattern = this.GetCountRowQueryPattern();
 			scalarQueryPattern += ReadifyWhereClause(where);
-			return Convert.ToInt32(Scalar(string.Format(scalarQueryPattern, string.IsNullOrEmpty(tableName) ? this.TableName : tableName), args));
+			return Convert.ToInt32(ScalarWithParams(string.Format(scalarQueryPattern, string.IsNullOrEmpty(tableName) ? this.TableName : tableName), inParams, outParams, ioParams, returnParams, connection, args));
 		}
 
 
@@ -1286,15 +1347,16 @@ namespace Massive
 			var info = binder.CallInfo;
 			if(info.ArgumentNames.Count != args.Length)
 			{
-				throw new InvalidOperationException("Please use named arguments for this type of query - the column name, orderby, columns, etc");
+				throw new InvalidOperationException("Please use named arguments for this type of query - the column name, orderby, columns, args, etc");
 			}
 
 			var columns = " * ";
 			var orderByClauseFragment = string.Format(" ORDER BY {0}", PrimaryKeyField);
 			var whereClauseFragment = string.Empty;
-			var whereArguments = new List<object>();
 			var wherePredicates = new List<string>();
-			var counter = 0;
+			var nameValueArgs = new ExpandoObject();
+			var nameValueDictionary = nameValueArgs.ToDictionary();
+			object[] userArgs = null;
 			if(info.ArgumentNames.Count > 0)
 			{
 				for(int i = 0; i < args.Length; i++)
@@ -1309,13 +1371,19 @@ namespace Massive
 							columns = args[i].ToString();
 							break;
 						case "where":
-							// add it as-is.
-							wherePredicates.Add(args[i].ToString());
+							wherePredicates.Add("( " + args[i].ToString() + " )");
+							break;
+						case "args":
+							userArgs = args[i] as object[];
+							if (userArgs == null)
+							{
+								userArgs = new object[] { args[i] };
+							}
 							break;
 						default:
-							wherePredicates.Add(string.Format(" {0} = {1}", name, this.PrefixParameterName(counter.ToString())));
-							whereArguments.Add(args[i]);
-							counter++;
+							// treat anything else as a name-value pair
+							wherePredicates.Add(string.Format("{0} = {1}", name, this.PrefixParameterName(name)));
+							nameValueDictionary.Add(name, args[i]);
 							break;
 					}
 				}
@@ -1330,7 +1398,7 @@ namespace Massive
 			switch(oplowercase)
 			{
 				case "count":
-					result = Count(TableName, whereClauseFragment, whereArguments.ToArray());
+					result = CountWithParams(TableName, whereClauseFragment, inParams: nameValueArgs, args: userArgs);
 					break;
 				case "sum":
 				case "max":
@@ -1339,7 +1407,7 @@ namespace Massive
 					var aggregate = this.GetAggregateFunction(oplowercase);
 					if(!string.IsNullOrWhiteSpace(aggregate))
 					{
-						result = Scalar(string.Format("SELECT {0}({1}) FROM {2} {3}", aggregate, columns, this.TableName, whereClauseFragment), whereArguments.ToArray());
+						result = ScalarWithParams(string.Format("SELECT {0}({1}) FROM {2} {3}", aggregate, columns, this.TableName, whereClauseFragment), inParams: nameValueArgs, args: userArgs);
 					}
 					break;
 				default:
@@ -1349,7 +1417,9 @@ namespace Massive
 					{
 						orderByClauseFragment = orderByClauseFragment + " DESC ";
 					}
-					result = justOne ? All(whereClauseFragment, orderByClauseFragment, 1, columns, whereArguments.ToArray()).FirstOrDefault() : All(whereClauseFragment, orderByClauseFragment, 0, columns, whereArguments.ToArray());
+					result = justOne ?
+							 AllWithParams(whereClauseFragment, orderByClauseFragment, 1, columns, inParams: nameValueArgs, args: userArgs).FirstOrDefault() :
+							 AllWithParams(whereClauseFragment, orderByClauseFragment, 0, columns, inParams: nameValueArgs, args: userArgs);
 					break;
 			}
 			return true;

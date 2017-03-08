@@ -22,16 +22,25 @@ namespace Massive.Tests.MySql
 
 
 		[Test]
-		public void MaxOnFilteredSet()
+		public void Max_SingleArg()
 		{
 			var soh = new Film();
-			var result = ((dynamic)soh).Max(columns: "film_id", where: "rental_duration>6");
+			var result = ((dynamic)soh).Max(columns: "film_id", where: "rental_duration > @0", args: 6);
 			Assert.AreEqual(988, result);
 		}
 
 
 		[Test]
-		public void MaxOnFilteredSet2()
+		public void Max_TwoArgs()
+		{
+			var soh = new Film();
+			var result = ((dynamic)soh).Max(columns: "film_id", where: "rental_duration > @0 AND rental_duration < @1", args: new object[] { 6, 100 });
+			Assert.AreEqual(988, result);
+		}
+
+
+		[Test]
+		public void Max_NameValuePair()
 		{
 			var film = new Film();
 			var result = ((dynamic)film).Max(columns: "film_id", rental_duration: 6);

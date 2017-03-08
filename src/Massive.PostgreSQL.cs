@@ -482,7 +482,7 @@ namespace Massive
 		/// <returns></returns>
 		protected virtual string GetCountRowQueryPattern()
 		{
-			return "SELECT COUNT(*) FROM {0} ";
+			return "SELECT COUNT(*) FROM {0}";
 		}
 
 

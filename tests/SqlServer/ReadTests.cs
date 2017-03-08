@@ -25,7 +25,7 @@ namespace Massive.Tests
 		public void MaxOnFilteredSet()
 		{
 			var soh = new SalesOrderHeader();
-			var result = ((dynamic)soh).Max(columns: "SalesOrderID", where: "SalesOrderID<100000");
+			var result = ((dynamic)soh).Max(columns: "SalesOrderID", where: "SalesOrderID < @0", args: 100000);
 			Assert.AreEqual(75123, result);
 		}
 
@@ -34,7 +34,7 @@ namespace Massive.Tests
 		public void MaxOnFilteredSet2()
 		{
 			var soh = new SalesOrderHeader();
-			var result = ((dynamic)soh).Max(columns: "SalesOrderID", TerritoryID:10);
+			var result = ((dynamic)soh).Max(columns: "SalesOrderID", TerritoryID: 10);
 			Assert.AreEqual(75117, result);
 		}
 
@@ -236,6 +236,19 @@ namespace Massive.Tests
 			dynamic soh = new SalesOrderHeader();
 			var singleInstance = soh.Single(SalesOrderID: 43666);
 			Assert.AreEqual(43666, singleInstance.SalesOrderID);
+			Assert.AreEqual(26, ((object)singleInstance).ToDictionary().Count);
+		}
+
+
+		[Test]
+		public void Single_ThreeColumns()
+		{
+			dynamic soh = new SalesOrderHeader();
+			var singleInstance = soh.Single(SalesOrderID: 43666, columns: "SalesOrderID, SalesOrderNumber, OrderDate");
+			Assert.AreEqual(43666, singleInstance.SalesOrderID);
+			Assert.AreEqual("SO43666", singleInstance.SalesOrderNumber);
+			Assert.AreEqual(new DateTime(2011, 5, 31), singleInstance.OrderDate);
+			Assert.AreEqual(3, ((object)singleInstance).ToDictionary().Count);
 		}
 
 
