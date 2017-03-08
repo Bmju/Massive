@@ -219,7 +219,7 @@ namespace Massive
 		/// <param name="cmd">The command from which to read the parameter values.</param>
 		/// <param name="args">Object specifying the parameter names.</param>
 		/// <param name="results">Dictionary for the result object.</param>
-		public static void AddParamValuesToResult(this DbCommand cmd, object args, IDictionary<string, object> results)
+		internal static void AddParamValuesToResult(this DbCommand cmd, object args, IDictionary<string, object> results)
 		{
 			if(args == null)
 			{
