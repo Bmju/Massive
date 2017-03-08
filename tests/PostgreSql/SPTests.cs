@@ -54,7 +54,7 @@ namespace Massive.Tests.Oracle
 		{
 			var db = new SPTestsDatabase();
 			// Only PostgreSQL supports anonymous parameters (AFAIK) - we treat object[] in the context of params differently from
-			// how it is treated when it appears in args: in the standard Massive API, to provide support for this. (Note, object[]
+			// how it is treated when it appears in args in the standard Massive API, to provide support for this. (Note, object[]
 			// makes no sense in the context of named parameters otherwise, and will throw an exception on the other DBs.)
 			dynamic fnResultAnon = db.ExecuteAsProcedure("find_max", inParams: new object[] { 12, 7 }, returnParams: new { returnValue = 0 });
 			Assert.AreEqual(12, fnResultAnon.returnValue);
@@ -192,11 +192,12 @@ namespace Massive.Tests.Oracle
 			Assert.AreEqual(4, count);
 		}
 
+		#region Dereferencing tests
 		[Test]
 		public void DereferenceCursorOutputParameter()
 		{
 			var db = new SPTestsDatabase();
-			// Unlike the Oracle data access layer, Npgsql v3 does not dereference cursors parameters.
+			// Unlike the Oracle data access layer, Npgsql v3 does not dereference cursor parameters.
 			// We have added back the support for this which was previously in Npgsql v2.
 			var employees = db.QueryFromProcedure("cursor_employees", outParams: new { refcursor = new Cursor() });
 			int count = 0;
@@ -208,7 +209,42 @@ namespace Massive.Tests.Oracle
 			Assert.AreEqual(9, count);
 		}
 
-		#region Dereferencing tests
+		[Test]
+		public void DereferenceFromQuery_ManualWrapping()
+		{
+			var db = new SPTestsDatabase();
+			// without a cursor param, nothing will trigger the wrapping transaction support in Massive
+			// so in this case we need to add the wrapping transaction manually (with TransactionScope or
+			// BeginTransaction, see other examples in this file)
+			int count = 0;
+			using(var scope = new TransactionScope())
+			{
+				var employees = db.Query("SELECT * FROM cursor_employees()");
+				foreach(var employee in employees)
+				{
+					Console.WriteLine(employee.firstname + " " + employee.lastname);
+					count++;
+				}
+				scope.Complete();
+			}
+			Assert.AreEqual(9, count);
+		}
+
+		[Test]
+		public void DereferenceFromQuery_AutoWrapping()
+		{
+			var db = new SPTestsDatabase();
+			// use dummy cursor to trigger wrapping transaction support in Massive
+			var employees = db.QueryWithParams("SELECT * FROM cursor_employees()", outParams: new { abc = new Cursor() });
+			int count = 0;
+			foreach(var employee in employees)
+			{
+				Console.WriteLine(employee.firstname + " " + employee.lastname);
+				count++;
+			}
+			Assert.AreEqual(9, count);
+		}
+
 		// Test various dereferencing patters (more relevant since we are coding this ourselves)
 		private void CheckMultiResultSetStructure(IEnumerable<IEnumerable<dynamic>> results, int count0 = 1, int count1 = 1, bool breakTest = false, bool idTest = false)
 		{
