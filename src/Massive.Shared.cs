@@ -608,6 +608,19 @@ namespace Massive
 
 
 		/// <summary>
+		/// Enumerates the reader yielding the result
+		/// </summary>
+		/// <param name="sql">The SQL to execute as a command.</param>
+		/// <param name="connection">The connection to use with the command.</param>
+		/// <param name="args">The parameter values.</param>
+		/// <returns>streaming enumerable with expandos, one for each row read</returns>
+		public virtual IEnumerable<dynamic> Query(string sql, DbConnection connection, params object[] args)
+		{
+			return QueryNWithParams<dynamic>(sql, connection: connection, args: args);
+		}
+
+
+		/// <summary>
 		/// Enumerates a reader for multiple result sets
 		/// </summary>
 		/// <param name="sql">The SQL to execute as a command.</param>
@@ -747,19 +760,6 @@ namespace Massive
 					if(trans != null) trans.Commit();
 				}
 			}
-		}
-
-
-		/// <summary>
-		/// Enumerates the reader yielding the result
-		/// </summary>
-		/// <param name="sql">The SQL to execute as a command.</param>
-		/// <param name="connection">The connection to use with the command.</param>
-		/// <param name="args">The parameter values.</param>
-		/// <returns>streaming enumerable with expandos, one for each row read</returns>
-		public virtual IEnumerable<dynamic> Query(string sql, DbConnection connection, params object[] args)
-		{
-			return QueryNWithParams<dynamic>(sql, connection: connection, args: args);
 		}
 
 
