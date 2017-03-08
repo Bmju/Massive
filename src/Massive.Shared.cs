@@ -603,18 +603,7 @@ namespace Massive
 		/// <returns>streaming enumerable with expandos, one for each row read</returns>
 		public virtual IEnumerable<dynamic> Query(string sql, params object[] args)
 		{
-			using(var conn = OpenConnection())
-			{
-				using(var rdr = CreateCommand(sql, conn, args).ExecuteReader())
-				{
-					while(rdr.Read())
-					{
-						yield return rdr.RecordToExpando();
-					}
-					rdr.Close();
-				}
-				conn.Close();
-			}
+			return QueryNWithParams<dynamic>(sql, args: args);
 		}
 
 
@@ -626,18 +615,20 @@ namespace Massive
 		/// <returns>streaming enumerable of enumerables, outer enumerable is the result sets, objects of inner enumerable are expandos, one for each row read</returns>
 		public virtual IEnumerable<IEnumerable<dynamic>> QueryMultiple(string sql, params object[] args)
 		{
-			using(var conn = OpenConnection())
-			{
-				using(var rdr = CreateCommand(sql, conn, args).ExecuteReader())
-				{
-					do
-					{
-						yield return rdr.YieldResult();
-					}
-					while(rdr.NextResult());
-				}
-				conn.Close();
-			}
+			return QueryNWithParams<IEnumerable<dynamic>>(sql, args: args);
+		}
+
+
+		/// <summary>
+		/// Enumerates a reader for multiple result sets
+		/// </summary>
+		/// <param name="sql">The SQL to execute as a command.</param>
+		/// <param name="connection">The connection to use with the command.</param>
+		/// <param name="args">The parameter values.</param>
+		/// <returns>streaming enumerable of enumerables, outer enumerable is the result sets, objects of inner enumerable are expandos, one for each row read</returns>
+		public virtual IEnumerable<IEnumerable<dynamic>> QueryMultiple(string sql, DbConnection connection, params object[] args)
+		{
+			return QueryNWithParams<IEnumerable<dynamic>>(sql, connection: connection, args: args);
 		}
 
 
@@ -654,7 +645,7 @@ namespace Massive
 		/// <returns>streaming enumerable with expandos, one for each row read</returns>
 		public virtual IEnumerable<dynamic> QueryFromProcedure(string spName, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, DbConnection connection = null)
 		{
-			return QueryWithParams(spName, inParams, outParams, ioParams, returnParams, true, connection);
+			return QueryNWithParams<dynamic>(spName, inParams, outParams, ioParams, returnParams, true, connection);
 		}
 
 
@@ -667,11 +658,11 @@ namespace Massive
 		/// <param name="outParams">The output parameter collection.</param>
 		/// <param name="ioParams">The input-output parameter collection.</param>
 		/// <param name="returnParams">The return value collection.</param>
-		/// <param name="connection">The connection to use, has to be open.</param>
+		/// <param name="connection">The connection to use (optional), has to be open if present.</param>
 		/// <returns>streaming enumerable with expandos, one for each row read</returns>
 		public virtual IEnumerable<IEnumerable<dynamic>> QueryMultipleFromProcedure(string spName, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, DbConnection connection = null)
 		{
-			return QueryMultipleWithParams(spName, inParams, outParams, ioParams, returnParams, true, connection);
+			return QueryNWithParams<IEnumerable<dynamic>>(spName, inParams, outParams, ioParams, returnParams, true, connection);
 		}
 
 
@@ -685,7 +676,7 @@ namespace Massive
 		/// <param name="ioParams">Input-output parameters (optional). Names and values are used.</param>
 		/// <param name="returnParams">Return parameters (optional). Names are used. Values are used to determine parameter type.</param>
 		/// <param name="isProcedure">Whether to execute the command as stored procedure or general SQL. Defaults to general SQL.</param>
-		/// <param name="connection">The connection to use, has to be open.</param>
+		/// <param name="connection">The connection to use (optional), has to be open if present.</param>
 		/// <returns>streaming enumerable with expandos, one for each row read</returns>
 		public IEnumerable<dynamic> QueryWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false, DbConnection connection = null)
 		{
@@ -703,7 +694,7 @@ namespace Massive
 		/// <param name="ioParams">Input-output parameters (optional). Names and values are used.</param>
 		/// <param name="returnParams">Return parameters (optional). Names are used. Values are used to determine parameter type.</param>
 		/// <param name="isProcedure">Whether to execute the command as stored procedure or general SQL. Defaults to general SQL.</param>
-		/// <param name="connection">The connection to use, has to be open.</param>
+		/// <param name="connection">The connection to use (optional), has to be open if present.</param>
 		/// <returns>streaming enumerable with expandos, one for each row read</returns>
 		public IEnumerable<IEnumerable<dynamic>> QueryMultipleWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false, DbConnection connection = null)
 		{
@@ -714,20 +705,21 @@ namespace Massive
 		/// <summary>
 		/// Share the main logic for QueryWithParams and QueryMultipleWithParams
 		/// </summary>
-		/// <typeparam name="T"></typeparam>
-		/// <param name="sql"></param>
-		/// <param name="inParams"></param>
-		/// <param name="outParams"></param>
-		/// <param name="ioParams"></param>
-		/// <param name="returnParams"></param>
-		/// <param name="isProcedure"></param>
-		/// <param name="connection"></param>
-		/// <returns></returns>
-		private IEnumerable<T> QueryNWithParams<T>(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false, DbConnection connection = null)
+		/// <typeparam name="T">dynamic for Query or IEnumerable&lt;dynamic&gt; for QueryMultiple</typeparam>
+		/// <param name="sql">Stored procedure name (or general SQL if isProcedure=false)</param>
+		/// <param name="inParams">Input parameters (optional). Names and values are used.</param>
+		/// <param name="outParams">Output parameters (optional). Names are used. Values are used to determine parameter type.</param>
+		/// <param name="ioParams">Input-output parameters (optional). Names and values are used.</param>
+		/// <param name="returnParams">Return parameters (optional). Names are used. Values are used to determine parameter type.</param>
+		/// <param name="isProcedure">Whether to execute the command as stored procedure or general SQL. Defaults to general SQL.</param>
+		/// <param name="connection">The connection to use (optional), has to be open if present.</param>
+		/// <param name="args">Traditional Massive auto-named arguments, if present these are added before the named params.</param>
+		/// <returns>enumerable of expandos, or enumerable of enumerable of expandos</returns>
+		private IEnumerable<T> QueryNWithParams<T>(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false, DbConnection connection = null, params object[] args)
 		{
 			using(var localConn = (connection == null ? OpenConnection() : null))
 			{
-				var cmd = CreateCommandWithNamedParams(sql, inParams, outParams, ioParams, returnParams, isProcedure, connection ?? localConn);
+				var cmd = CreateCommandWithNamedParams(sql, inParams, outParams, ioParams, returnParams, isProcedure, connection ?? localConn, args);
 				// manage wrapping transaction if required, and if we have not been passed an incoming connection
 				using(var trans = ((connection == null && Transaction.Current == null && cmd.RequiresWrappingTransaction(this)) ? localConn.BeginTransaction() : null))
 				{
@@ -767,14 +759,7 @@ namespace Massive
 		/// <returns>streaming enumerable with expandos, one for each row read</returns>
 		public virtual IEnumerable<dynamic> Query(string sql, DbConnection connection, params object[] args)
 		{
-			using(var rdr = CreateCommand(sql, connection, args).ExecuteReader())
-			{
-				while(rdr.Read())
-				{
-					yield return rdr.RecordToExpando();
-				}
-				rdr.Close();
-			}
+			return QueryNWithParams<dynamic>(sql, connection: connection, args: args);
 		}
 
 
@@ -841,7 +826,10 @@ namespace Massive
 		/// <param name="connection">The connection to use with the command.</param>
 		/// <param name="args">The parameter values.</param>
 		/// <returns>The value returned by the database after executing the command.</returns>
-		/// <remarks>After some fairly extensive tests, I believe that adding this 'missing' overload is fully non-breaking for both compile and link against existing code.</remarks>
+		/// <remarks>
+		/// After some fairly extensive tests, I believe that adding this 'missing' overload is non-breaking for both compile and link against existing code.
+		/// It is certainly useful and required for full cursor support and related user transaction control.
+		/// </remarks>
 		public virtual int Execute(string sql, DbConnection connection, params object[] args)
 		{
 			return ExecuteDbCommand(CreateCommand(sql, null, args), connection, null);
@@ -1552,11 +1540,13 @@ namespace Massive
 		/// <param name="returnParams">Object containing return parameter name:value pairs</param>
 		/// <param name="isProcedure">Whether to execute the command as stored procedure or general SQL.</param>
 		/// <param name="connection">The connection to use, has to be open.</param>
+		/// <param name="args">Traditional Massive auto-named arguments, if present these are added before the named params.</param>
 		/// <returns>Ready to use DbCommand</returns>
-		public DbCommand CreateCommandWithNamedParams(string sql, object inParams, object outParams, object ioParams, object returnParams, bool isProcedure, DbConnection connection)
+		public DbCommand CreateCommandWithNamedParams(string sql, object inParams, object outParams, object ioParams, object returnParams, bool isProcedure, DbConnection connection, params object[] args)
 		{
 			DbCommand cmd = CreateCommand(sql, connection);
 			if(isProcedure) cmd.CommandType = CommandType.StoredProcedure;
+			cmd.AddParams(args);
 			cmd.AddNamedParams(inParams, ParameterDirection.Input);
 			cmd.AddNamedParams(outParams, ParameterDirection.Output);
 			cmd.AddNamedParams(ioParams, ParameterDirection.InputOutput);
