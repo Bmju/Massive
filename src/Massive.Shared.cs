@@ -94,10 +94,7 @@ namespace Massive
 			}
 			else
 			{
-				// Adding the : or @ prefix to DbParameter.ParameterName works in most cases on most databases, but
-				// fails to bind for procedure/function parameter names in Oracle.
-				// Not prefixing here always works, on the current versions of all currently supported providers...
-				p.ParameterName = name ?? cmd.Parameters.Count.ToString();
+				p.ParameterName = DynamicModel.PrefixParameterName(name ?? cmd.Parameters.Count.ToString(), true);
 			}
 			p.SetDirection(direction);
 			if(value == null)
@@ -1382,7 +1379,7 @@ namespace Massive
 							break;
 						default:
 							// treat anything else as a name-value pair
-							wherePredicates.Add(string.Format("{0} = {1}", name, this.PrefixParameterName(name)));
+							wherePredicates.Add(string.Format("{0} = {1}", name, PrefixParameterName(name)));
 							nameValueDictionary.Add(name, args[i]);
 							break;
 					}
@@ -1442,7 +1439,7 @@ namespace Massive
 			foreach(var item in (IDictionary<string, object>)expando)
 			{
 				fieldNames.Add(item.Key);
-				valueParameters.Add(this.PrefixParameterName(counter.ToString()));
+				valueParameters.Add(PrefixParameterName(counter.ToString()));
 				result.AddParam(item.Value);
 				counter++;
 			}
@@ -1466,7 +1463,7 @@ namespace Massive
 		/// <returns>ready to use DbCommand</returns>
 		public virtual DbCommand CreateUpdateCommand(dynamic expando, object key)
 		{
-			return CreateUpdateWhereCommand(expando, string.Format("{0} = {1}", this.PrimaryKeyField, this.PrefixParameterName("0")), key);
+			return CreateUpdateWhereCommand(expando, string.Format("{0} = {1}", this.PrimaryKeyField, PrefixParameterName("0")), key);
 		}
 
 
@@ -1499,7 +1496,7 @@ namespace Massive
 					else
 					{
 						result.AddParam(val);
-						fieldSetFragments.Add(string.Format("{0} = {1}", item.Key, this.PrefixParameterName(counter.ToString())));
+						fieldSetFragments.Add(string.Format("{0} = {1}", item.Key, PrefixParameterName(counter.ToString())));
 						counter++;
 					}
 				}
@@ -1532,7 +1529,7 @@ namespace Massive
 			}
 			else
 			{
-				sql += string.Format("WHERE {0}={1}", this.PrimaryKeyField, this.PrefixParameterName("0"));
+				sql += string.Format("WHERE {0}={1}", this.PrimaryKeyField, PrefixParameterName("0"));
 				args = new[] { key };
 			}
 			return CreateCommand(sql, null, args);
@@ -1770,7 +1767,7 @@ namespace Massive
 		/// <returns>ready to use predicate which assumes parameter to use for value is the first parameter</returns>
 		private string GetPkComparisonPredicateQueryFragment()
 		{
-			return string.Format("{0} = {1}", this.PrimaryKeyField, this.PrefixParameterName("0"));
+			return string.Format("{0} = {1}", this.PrimaryKeyField, PrefixParameterName("0"));
 		}
 
 

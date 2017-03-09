@@ -239,9 +239,9 @@ namespace Massive
 		/// </summary>
 		/// <param name="rawName">raw name of the parameter, without parameter prefix</param>
 		/// <returns>rawName prefixed with the db specific prefix (if any)</returns>
-		protected virtual string PrefixParameterName(string rawName)
+		internal static string PrefixParameterName(string rawName, bool forDbParamObject = false)
 		{
-			return "@" + rawName;
+			return forDbParamObject ? rawName : ("@" + rawName);
 		}
 
 
