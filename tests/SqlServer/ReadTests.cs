@@ -22,6 +22,17 @@ namespace Massive.Tests
 
 
 		[Test]
+		public void Guid_Arg()
+		{
+			// SQL Server has true Guid type support
+			var db = new DynamicModel(TestConstants.ReadTestConnectionStringName);
+			var guid = Guid.NewGuid();
+			var item = db.Query("SELECT @0 AS val", guid).FirstOrDefault();
+			Assert.AreEqual(guid, item.val);
+		}
+
+
+		[Test]
 		public void MaxOnFilteredSet()
 		{
 			var soh = new SalesOrderHeader();

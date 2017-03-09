@@ -27,6 +27,18 @@ namespace Massive.Tests.Oracle
 
 
 		[Test]
+		public void Guid_Arg()
+		{
+			// Oracle has Guid support mapped to strings by Massive
+			var db = new DynamicModel(TestConstants.ReadWriteTestConnectionStringName);
+			var guid = Guid.NewGuid();
+			var item = db.ExecuteWithParams("begin :val := :inval; end;", inParams: new { inval = guid }, outParams: new { val = new Guid() });
+			Assert.AreEqual(typeof(string), item.val.GetType());
+			Assert.AreEqual(guid, new Guid(item.val));
+		}
+
+
+		[Test]
 		public void All_NoParameters()
 		{
 			var depts = new Department();

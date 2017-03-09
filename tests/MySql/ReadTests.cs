@@ -22,6 +22,18 @@ namespace Massive.Tests.MySql
 
 
 		[Test]
+		public void Guid_Arg()
+		{
+			// MySQL has Guid support mapped to strings by the Oracle/MySQL or Devart drivers
+			var db = new DynamicModel(TestConstants.ReadTestConnectionStringName);
+			var guid = Guid.NewGuid();
+			var item = db.Query("SELECT @0 AS val", guid).FirstOrDefault();
+			Assert.AreEqual(typeof(string), item.val.GetType());
+			Assert.AreEqual(guid, new Guid(item.val));
+		}
+
+
+		[Test]
 		public void Max_SingleArg()
 		{
 			var soh = new Film();
