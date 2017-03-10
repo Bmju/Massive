@@ -981,7 +981,7 @@ namespace Massive
 		/// <returns>streaming enumerable with expandos, one for each row read</returns>
 		public virtual IEnumerable<dynamic> All(string where = "", string orderBy = "", int limit = 0, string columns = "*", params object[] args)
 		{
-			return QueryNWithParams<dynamic>(string.Format(BuildSelectQueryPattern(where, orderBy, limit), columns, TableName), args: args);
+			return AllWithParams(where, orderBy, limit, columns, args: args);
 		}
 
 
