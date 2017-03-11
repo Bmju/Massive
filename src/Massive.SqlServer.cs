@@ -246,6 +246,17 @@ namespace Massive
 
 
 		/// <summary>
+		/// Gets the name of the parameter without the prefix, to use in results
+		/// </summary>
+		/// <param name="rawName">The name of the parameter, prefixed if we prefixed it above</param>
+		/// <returns>raw name</returns>
+		internal static string DeprefixParameterName(string dbParamName)
+		{
+			return dbParamName;
+		}
+
+
+		/// <summary>
 		/// Gets the select query pattern, to use for building select queries. The pattern should include as place holders: {0} for project list, {1} for the source (FROM clause).
 		/// </summary>
 		/// <param name="limit">The limit for the resultset. 0 means no limit.</param>

@@ -174,6 +174,11 @@ namespace Massive
 			object[] values = nameValuePairs as object[];
 			if(values != null)
 			{
+				if(direction != ParameterDirection.Input)
+				{
+					// TO DO: may be able to use this in other directions on some DBs?
+					throw new InvalidOperationException("object[] arguments supported for input parameters only");
+				}
 				// anonymous parameters from array
 				foreach(var value in values)
 				{
@@ -211,52 +216,25 @@ namespace Massive
 
 
 		/// <summary>
-		/// Extension method to read back parameter return values after execution
+		/// Send back command parameter return values of all non-input parameters in a dynamic object.
 		/// </summary>
 		/// <param name="cmd">The command from which to read the parameter values.</param>
-		/// <param name="args">Object specifying the parameter names.</param>
-		/// <param name="results">Dictionary for the result object.</param>
-		internal static void AddParamValuesToResult(this DbCommand cmd, object args, IDictionary<string, object> results)
+		/// <returns></returns>
+		public static dynamic ResultsAsDynamic(this DbCommand cmd)
 		{
-			if(args == null)
+			dynamic result = new ExpandoObject();
+			var resultDictionary = (IDictionary<string, object>)result;
+			for(int i = 0; i < cmd.Parameters.Count; i++)
 			{
-				return;
-			}
-
-			object[] argsArray = args as object[];
-			if(argsArray != null)
-			{
-				throw new InvalidOperationException("object[] arguments supported for input parameters only");
-			}
-
-			if(args is ExpandoObject)
-			{
-				foreach(var item in (IDictionary<string, object>)args)
+				var param = cmd.Parameters[i];
+				if(param.Direction != ParameterDirection.Input)
 				{
-					string name = item.Key;
-					object value = cmd.Parameters[name].Value;
-					results.Add(name, value == DBNull.Value ? null : value);
-				}
-				return;
-			}
-
-			if(args.GetType() == typeof(NameValueCollection) || args.GetType().IsSubclassOf(typeof(NameValueCollection)))
-			{
-				var argsCollection = (NameValueCollection)args;
-				foreach(string name in argsCollection)
-				{
-					object value = cmd.Parameters[name].Value;
-					results.Add(name, value == DBNull.Value ? null : value);
+					var name = DynamicModel.DeprefixParameterName(param.ParameterName);
+					var value = param.Value;
+					resultDictionary.Add(name, value == DBNull.Value ? null : value);
 				}
 			}
-
-			// read back values specified by anonymous object or POCO
-			foreach(PropertyInfo property in args.GetType().GetProperties())
-			{
-				string name = property.Name;
-				object value = cmd.Parameters[name].Value;
-				results.Add(name, value == DBNull.Value ? null : value);
-			}
+			return result;
 		}
 
 
@@ -914,13 +892,8 @@ namespace Massive
 				}
 				else
 				{
-					dynamic result = new ExpandoObject();
 					command.ExecuteNonQuery();
-					var resultDictionary = (IDictionary<string, object>)result;
-					command.AddParamValuesToResult(outParams, resultDictionary);
-					command.AddParamValuesToResult(ioParams, resultDictionary);
-					command.AddParamValuesToResult(returnParams, resultDictionary);
-					return result;
+					return command.ResultsAsDynamic();
 				}
 			}
 		}

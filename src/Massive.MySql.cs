@@ -228,9 +228,26 @@ namespace Massive
 		/// </summary>
 		/// <param name="rawName">raw name of the parameter, without parameter prefix</param>
 		/// <returns>rawName prefixed with the db specific prefix (if any)</returns>
+		/// <remarks>
+		/// Not prefixing the internal name works on all other dbs which are supported so far, and
+		/// on one of the two providers for MySQL (Oracle/MySQL) but not the other (Devart).
+		/// (The alternative, and previous pattern in Massive, of always internally prefixing,
+		/// works in all cases and all DBs except for named parameters on Oracle.)
+		/// </remarks>
 		internal static string PrefixParameterName(string rawName, bool forDbParamObject = false)
 		{
 			return "@" + rawName;
+		}
+
+
+		/// <summary>
+		/// Gets the name of the parameter without the prefix, to use in results
+		/// </summary>
+		/// <param name="rawName">The name of the parameter, prefixed if we prefixed it above</param>
+		/// <returns>raw name</returns>
+		internal static string DeprefixParameterName(string dbParamName)
+		{
+			return dbParamName.Substring(1);
 		}
 
 

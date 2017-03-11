@@ -485,7 +485,18 @@ namespace Massive
 		/// <returns>rawName prefixed with the db specific prefix (if any)</returns>
 		internal static string PrefixParameterName(string rawName, bool forDbParamObject = false)
 		{
-			return ":" + rawName;
+			return forDbParamObject ? rawName : (":" + rawName);
+		}
+
+
+		/// <summary>
+		/// Gets the name of the parameter without the prefix, to use in results
+		/// </summary>
+		/// <param name="rawName">The name of the parameter, prefixed if we prefixed it above</param>
+		/// <returns>raw name</returns>
+		internal static string DeprefixParameterName(string dbParamName)
+		{
+			return dbParamName;
 		}
 
 

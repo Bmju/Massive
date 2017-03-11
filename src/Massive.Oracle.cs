@@ -270,9 +270,27 @@ namespace Massive
 		/// </summary>
 		/// <param name="rawName">raw name of the parameter, without parameter prefix</param>
 		/// <returns>rawName prefixed with the db specific prefix (if any)</returns>
+		/// <remarks>
+		/// Prefixing both internally and externally (the previous pattern in Massive) works in all cases
+		/// on all providers except for named parameters on Oracle.
+		/// (The alternative and new pattern we've chosen to prefer where possible - because it's slightly
+		/// cheaper to execute - of never prefixing internally, works for all cases and all providers except
+		/// for the Devart provider for MySQL.)
+		/// </remarks>
 		internal static string PrefixParameterName(string rawName, bool forDbParamObject = false)
 		{
 			return forDbParamObject ? rawName : (":" + rawName);
+		}
+
+
+		/// <summary>
+		/// Gets the name of the parameter without the prefix, to use in results
+		/// </summary>
+		/// <param name="rawName">The name of the parameter, prefixed if we prefixed it above</param>
+		/// <returns>raw name</returns>
+		internal static string DeprefixParameterName(string dbParamName)
+		{
+			return dbParamName;
 		}
 
 
