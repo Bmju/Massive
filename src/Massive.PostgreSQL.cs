@@ -595,17 +595,6 @@ namespace Massive
 
 		#region Properties
 		/// <summary>
-		/// Provides the default DbProviderFactoryName to the core to create a factory on the fly in generic code.
-		/// </summary>
-		/// <remarks>If you're using an older version of Npgsql, be sure to manually register the DbProviderFactory in either the machine.config file or in your
-		/// application's app/web.config file.</remarks>
-		protected virtual string DbProviderFactoryName
-		{
-			get { return "Npgsql"; }
-		}
-
-
-		/// <summary>
 		/// Gets the table schema query to use to obtain meta-data for a given table and schema
 		/// </summary>
 		protected virtual string TableWithSchemaQuery

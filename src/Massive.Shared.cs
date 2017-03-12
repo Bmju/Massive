@@ -515,7 +515,14 @@ namespace Massive
 			var _providerName = connectionStringProvider.GetProviderName(connectionStringName);
 			if(string.IsNullOrWhiteSpace(_providerName))
 			{
-				_providerName = this.DbProviderFactoryName;
+				//_providerName = "System.Data.SqlClient";
+				//_providerName = "Oracle.ManagedDataAccess.Client";
+				//_providerName = "Oracle.DataAccess.Client";
+				//_providerName = "Npgsql";
+				//_providerName = "System.Data.SQLite";
+				//_providerName = "MySql.Data.MySqlClient";
+				//_providerName = "Devart.Data.MySql";
+				throw new NotSupportedException("Hard-coded provider name is now deprecated in Massive: you are recommended to use ProviderName=\"...\" in your connection string definition, but you may edit Massive.Shared.cs (look for this error message) to hard code the value for backwards compatibility");
 			}
 			_factory = DbProviderFactories.GetFactory(_providerName);
 			_connectionString = connectionStringProvider.GetConnectionString(connectionStringName);

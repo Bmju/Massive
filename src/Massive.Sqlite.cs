@@ -368,15 +368,6 @@ namespace Massive
 
 		#region Properties
 		/// <summary>
-		/// Provides the default DbProviderFactoryName to the core to create a factory on the fly in generic code.
-		/// </summary>
-		protected virtual string DbProviderFactoryName
-		{
-			get { return "System.Data.SQLite"; }
-		}
-
-
-		/// <summary>
 		/// Gets the table schema query to use to obtain meta-data for a given table and schema
 		/// </summary>
 		protected virtual string TableWithSchemaQuery

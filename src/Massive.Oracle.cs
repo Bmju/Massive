@@ -399,20 +399,6 @@ namespace Massive
 
 		#region Properties
 		/// <summary>
-		/// Provides the default DbProviderFactoryName to the core to create a factory on the fly in generic code.
-		/// </summary>
-		/// <remarks>By default it uses ODP.NET's unmanaged CLI wrapping ADO.NET provider. To use another provider, e.g. the managed ODP.NET provider or another 3rd party provider, 
-		/// please override this property and return the known factory name instead. For the ODP.NET managed provider, return "Oracle.ManagedDataAccess.Client".
-		/// Microsoft has deprecated their Oracle ADO.NET provider, don't use that one anymore.
-		/// It's also possible to set this provider with the connection string in the application's config file. 
-		/// </remarks>
-		protected virtual string DbProviderFactoryName
-		{
-			get { return "Oracle.DataAccess.Client"; }
-		}
-
-
-		/// <summary>
 		/// Gets the table schema query to use to obtain meta-data for a given table and schema
 		/// </summary>
 		protected virtual string TableWithSchemaQuery
