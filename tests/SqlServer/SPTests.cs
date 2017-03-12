@@ -29,8 +29,8 @@ namespace Massive.Tests.Oracle
 		public void NormalSingleCall()
 		{
 			// Check that things are up and running normally before trying the new stuff
-			var db = new SalesOrderHeader();
-			var item = db.Single("SalesOrderID=@0", args: 43659);
+			var soh = new SalesOrderHeader();
+			var item = soh.Single("SalesOrderID=@0", args: 43659);
 			Assert.AreEqual("PO522145787", item.PurchaseOrderNumber);
 		}
 
