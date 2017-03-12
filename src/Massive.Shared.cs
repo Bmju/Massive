@@ -427,25 +427,6 @@ namespace Massive
 
 
 	/// <summary>
-	/// Convenience class for opening/executing data
-	/// </summary>
-	public static class DB
-	{
-		public static DynamicModel Current
-		{
-			get
-			{
-				if(ConfigurationManager.ConnectionStrings.Count > 1)
-				{
-					return new DynamicModel(ConfigurationManager.ConnectionStrings[1].Name);
-				}
-				throw new InvalidOperationException("Need a connection string name - can't determine what it is");
-			}
-		}
-	}
-
-
-	/// <summary>
 	/// Set this class as the value of a parameter to indicate that the underlying db cursor type should be used.
 	/// </summary>
 	public class Cursor
@@ -467,6 +448,25 @@ namespace Massive
 		public Cursor(object value)
 		{
 			Value = value;
+		}
+	}
+
+
+	/// <summary>
+	/// Convenience class for opening/executing data
+	/// </summary>
+	public static class DB
+	{
+		public static DynamicModel Current
+		{
+			get
+			{
+				if(ConfigurationManager.ConnectionStrings.Count > 1)
+				{
+					return new DynamicModel(ConfigurationManager.ConnectionStrings[1].Name);
+				}
+				throw new InvalidOperationException("Need a connection string name - can't determine what it is");
+			}
 		}
 	}
 
