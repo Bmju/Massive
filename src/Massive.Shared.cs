@@ -461,11 +461,12 @@ namespace Massive
 		{
 			get
 			{
-				if(ConfigurationManager.ConnectionStrings.Count > 1)
-				{
-					return new DynamicModel(ConfigurationManager.ConnectionStrings[1].Name);
-				}
-				throw new InvalidOperationException("Need a connection string name - can't determine what it is");
+				throw new NotSupportedException("DB.Current is now deprecated in Massive, since it is not reliable to assume that Machine.config has precisely one other connection string, use `db = new DynamicModel(connectionStringName)` instead; but look for this exception message in Massive.Shared.cs if you need to re-enable this code");
+				//if(ConfigurationManager.ConnectionStrings.Count > 1)
+				//{
+				//	return new DynamicModel(ConfigurationManager.ConnectionStrings[1].Name);
+				//}
+				//throw new InvalidOperationException("Need a connection string name - can't determine what it is");
 			}
 		}
 	}
@@ -522,7 +523,7 @@ namespace Massive
 				//_providerName = "System.Data.SQLite";
 				//_providerName = "MySql.Data.MySqlClient";
 				//_providerName = "Devart.Data.MySql";
-				throw new NotSupportedException("Hard-coded provider name is now deprecated in Massive: you are recommended to use ProviderName=\"...\" in your connection string definition, but you may edit Massive.Shared.cs (look for this error message) to hard code the value for backwards compatibility");
+				throw new NotSupportedException("Hard-coded provider name is now deprecated in Massive: you are recommended to use ProviderName=\"...\" in your connection string definition, but you may edit Massive.Shared.cs (look for this exception message) to hard code the value for backwards compatibility");
 			}
 			_factory = DbProviderFactories.GetFactory(_providerName);
 			_connectionString = connectionStringProvider.GetConnectionString(connectionStringName);
