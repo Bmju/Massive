@@ -121,7 +121,7 @@ namespace Massive
 				{
 					// Placeholder cursor ref; we only need the value if passing in a cursor by value
 					// doesn't work on Postgres.
-					if (!p.SetCursor(cursor.Value))
+					if(!p.SetCursor(cursor.Value))
 					{
 						throw new InvalidOperationException("ADO.NET provider does not support cursors");
 					}
@@ -593,6 +593,17 @@ namespace Massive
 
 
 		/// <summary>
+		/// Enumerates a reader against the specified command using a new connection and yielding the result
+		/// </summary>
+		/// <param name="command">The command to execute.</param>
+		/// <returns>streaming enumerable with expandos, one for each row read</returns>
+		public virtual IEnumerable<dynamic> Query(DbCommand command)
+		{
+			return QueryNWithParams<dynamic>(sql: string.Empty, command: command);
+		}
+
+
+		/// <summary>
 		/// Enumerates the reader yielding the result
 		/// </summary>
 		/// <param name="sql">The SQL to execute as a command.</param>
@@ -723,18 +734,26 @@ namespace Massive
 		/// <param name="returnParams">Return parameters (optional). Names are used. Values are used to determine parameter type.</param>
 		/// <param name="isProcedure">Whether to execute the command as stored procedure or general SQL. Defaults to general SQL.</param>
 		/// <param name="connection">The connection to use (optional), has to be open if present.</param>
+		/// <param name="command">The command to execute (optional), sql and all params specifications ignored, if present.</param>
 		/// <param name="args">Traditional Massive auto-named arguments, if present these are added before the named params.</param>
 		/// <returns>enumerable of expandos, or enumerable of enumerable of expandos</returns>
-		private IEnumerable<T> QueryNWithParams<T>(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false, DbConnection connection = null, params object[] args)
+		private IEnumerable<T> QueryNWithParams<T>(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false, DbConnection connection = null, DbCommand command = null, params object[] args)
 		{
 			using(var localConn = (connection == null ? OpenConnection() : null))
 			{
-				var cmd = CreateCommandWithNamedParams(sql, inParams, outParams, ioParams, returnParams, isProcedure, connection ?? localConn, args);
+				if(command != null)
+				{
+					command.Connection = localConn;
+				}
+				else
+				{
+					command = CreateCommandWithParams(sql, inParams, outParams, ioParams, returnParams, isProcedure, connection ?? localConn, args);
+				}
 				// manage wrapping transaction if required, and if we have not been passed an incoming connection
-				using(var trans = ((connection == null && Transaction.Current == null && cmd.RequiresWrappingTransaction(this)) ? localConn.BeginTransaction() : null))
+				using(var trans = ((connection == null && Transaction.Current == null && command.RequiresWrappingTransaction(this)) ? localConn.BeginTransaction() : null))
 				{
 					// TO DO: Apply single result hint when appropriate (once Npgsql is dereferencing for us)
-					using(var rdr = cmd.ExecuteDereferencingReader(connection ?? localConn, this))
+					using(var rdr = command.ExecuteDereferencingReader(connection ?? localConn, this))
 					{
 						if(typeof(T) == typeof(IEnumerable<dynamic>))
 						{
@@ -785,7 +804,7 @@ namespace Massive
 		/// <returns>first value returned from the query executed or null of no result was returned by the database.</returns>
 		public virtual object ScalarWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, DbConnection connection = null, params object[] args)
 		{
-			return ExecuteWithParams(sql, inParams, outParams, ioParams, returnParams, false, true, connection, args);
+			return ExecuteWithParams(sql, inParams, outParams, ioParams, returnParams, false, true, connection, null, args);
 		}
 
 
@@ -874,25 +893,33 @@ namespace Massive
 		/// <param name="isProcedure">Whether to execute the command as stored procedure or general SQL. Defaults to general SQL.</param>
 		/// <param name="isScalar">Whether to execute the command as a scalar or not. Defaults to not.</param>
 		/// <param name="connection">The connection to use (optional), has to be open if present.</param>
+		/// <param name="command">The command to execute (optional), if present sql and params ignored are ignored for making the command but any out, io and return params still specify what to read back.</param>
 		/// <param name="args">Traditional Massive auto-named arguments, if present these are added before the named params.</param>
 		/// <returns>Dynamic holding return values of any output, input-output and return parameters.</returns>
-		public dynamic ExecuteWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false, bool isScalar = false, DbConnection connection = null, params object[] args)
+		public dynamic ExecuteWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false, bool isScalar = false, DbConnection connection = null, DbCommand command = null, params object[] args)
 		{
 			using(var localConn = (connection == null ? OpenConnection() : null))
 			{
-				var cmd = CreateCommandWithNamedParams(sql, inParams, outParams, ioParams, returnParams, isProcedure, connection ?? localConn, args);
+				if(command != null)
+				{
+					command.Connection = localConn;
+				}
+				else
+				{
+					command = CreateCommandWithParams(sql, inParams, outParams, ioParams, returnParams, isProcedure, connection ?? localConn, args);
+				}
 				if(isScalar)
 				{
-					return cmd.ExecuteScalar();
+					return command.ExecuteScalar();
 				}
 				else
 				{
 					dynamic result = new ExpandoObject();
-					cmd.ExecuteNonQuery();
+					command.ExecuteNonQuery();
 					var resultDictionary = (IDictionary<string, object>)result;
-					cmd.AddParamValuesToResult(outParams, resultDictionary);
-					cmd.AddParamValuesToResult(ioParams, resultDictionary);
-					cmd.AddParamValuesToResult(returnParams, resultDictionary);
+					command.AddParamValuesToResult(outParams, resultDictionary);
+					command.AddParamValuesToResult(ioParams, resultDictionary);
+					command.AddParamValuesToResult(returnParams, resultDictionary);
 					return result;
 				}
 			}
@@ -969,7 +996,7 @@ namespace Massive
 		/// <returns>streaming enumerable with expandos, one for each row read</returns>
 		public virtual IEnumerable<dynamic> AllWithParams(string where = "", string orderBy = "", int limit = 0, string columns = "*", object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, DbConnection connection = null, params object[] args)
 		{
-			return QueryNWithParams<dynamic>(string.Format(BuildSelectQueryPattern(where, orderBy, limit), columns, TableName), inParams, outParams, ioParams, returnParams, false, connection, args);
+			return QueryNWithParams<dynamic>(string.Format(BuildSelectQueryPattern(where, orderBy, limit), columns, TableName), inParams, outParams, ioParams, returnParams, false, connection, null, args);
 		}
 
 
@@ -1372,7 +1399,7 @@ namespace Massive
 							break;
 						case "args":
 							userArgs = args[i] as object[];
-							if (userArgs == null)
+							if(userArgs == null)
 							{
 								userArgs = new object[] { args[i] };
 							}
@@ -1582,7 +1609,7 @@ namespace Massive
 		/// <param name="conn">The connection to assign the command to.</param>
 		/// <param name="args">The parameter values.</param>
 		/// <returns>new DbCommand, ready to rock</returns>
-		public DbCommand CreateCommand(string sql, DbConnection conn, params object[] args)
+		public DbCommand CreateCommand(string sql, DbConnection conn = null, params object[] args)
 		{
 			var result = _factory.CreateCommand();
 			if(result != null)
@@ -1606,10 +1633,10 @@ namespace Massive
 		/// <param name="ioParams">Object containing input-output parameter name:value pairs</param>
 		/// <param name="returnParams">Object containing return parameter name:value pairs</param>
 		/// <param name="isProcedure">Whether to execute the command as stored procedure or general SQL.</param>
-		/// <param name="connection">The connection to use, has to be open.</param>
+		/// <param name="connection">The connection to use (optional), has to be open if present.</param>
 		/// <param name="args">Traditional Massive auto-named arguments, if present these are added before the named params.</param>
 		/// <returns>Ready to use DbCommand</returns>
-		public DbCommand CreateCommandWithNamedParams(string sql, object inParams, object outParams, object ioParams, object returnParams, bool isProcedure, DbConnection connection, params object[] args)
+		public DbCommand CreateCommandWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false, DbConnection connection = null, params object[] args)
 		{
 			DbCommand cmd = CreateCommand(sql, connection);
 			if(isProcedure) cmd.CommandType = CommandType.StoredProcedure;
