@@ -1,10 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Text;
 using NUnit.Framework;
 using PostgreSql.TableClasses;
 using SD.Tools.OrmProfiler.Interceptor;
+
+using Massive;
+using Massive.Tests;
 
 namespace PostgreSql
 {
@@ -22,7 +26,20 @@ namespace PostgreSql
 		{
 			InterceptorCore.Initialize("Massive Postgresql Read/Write tests");
 		}
-		
+
+
+		[Test]
+		public void Guid_Arg()
+		{
+			// PostgreSQL has true Guid type support
+			var db = new DynamicModel(TestConstants.ReadWriteTestConnectionStringName);
+			var guid = Guid.NewGuid();
+			var command = db.CreateCommand("SELECT @0 AS val", null, guid);
+			Assert.AreEqual(DbType.Guid, command.Parameters[0].DbType);
+			var item = db.Query(command).FirstOrDefault();
+			Assert.AreEqual(guid, item.val);
+		}
+
 
 		[Test]
 		public void All_NoParameters()

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Text;
 using NUnit.Framework;
@@ -21,6 +22,20 @@ namespace Massive.Tests.Sqlite
 		public void Setup()
 		{
 			InterceptorCore.Initialize("Sqlite Read/Write tests");
+		}
+
+
+		[Test]
+		public void Guid_Arg()
+		{
+			// Sqlite has native Guid parameter support, but the SELECT output is a byte[16] array
+			var db = new DynamicModel(TestConstants.ReadWriteTestConnectionStringName);
+			var guid = Guid.NewGuid();
+			var command = db.CreateCommand("SELECT @0 AS val", null, guid);
+			Assert.AreEqual(DbType.Guid, command.Parameters[0].DbType);
+			var item = db.Query(command).FirstOrDefault();
+			Assert.AreEqual(typeof(byte[]), item.val.GetType());
+			Assert.AreEqual(guid, new Guid(item.val));
 		}
 
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Data;
 using System.Dynamic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -24,10 +25,12 @@ namespace Massive.Tests.MySql
 		[Test]
 		public void Guid_Arg()
 		{
-			// MySQL has Guid support mapped to strings by the Oracle/MySQL or Devart drivers
+			// MySQL has native Guid parameter support, but the SELECT output is a string
 			var db = new DynamicModel(TestConstants.ReadTestConnectionStringName);
 			var guid = Guid.NewGuid();
-			var item = db.Query("SELECT @0 AS val", guid).FirstOrDefault();
+			var command = db.CreateCommand("SELECT @0 AS val", null, guid);
+			Assert.AreEqual(DbType.Guid, command.Parameters[0].DbType);
+			var item = db.Query(command).FirstOrDefault();
 			Assert.AreEqual(typeof(string), item.val.GetType());
 			Assert.AreEqual(guid, new Guid(item.val));
 		}

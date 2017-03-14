@@ -378,19 +378,11 @@ namespace Massive
 		/// <param name="value">The non-null value to set. Nulls are handled in shared code.</param>
 		private static void SetValue(this DbParameter p, object value)
 		{
-			if(value is Guid)
+			p.Value = value;
+			var valueAsString = value as string;
+			if(valueAsString != null)
 			{
-				p.Value = value.ToString();
-				p.Size = 36;
-			}
-			else
-			{
-				p.Value = value;
-				var valueAsString = value as string;
-				if(valueAsString != null)
-				{
-					p.Size = valueAsString.Length > 4000 ? -1 : 4000;
-				}
+				p.Size = valueAsString.Length > 4000 ? -1 : 4000;
 			}
 		}
 	}

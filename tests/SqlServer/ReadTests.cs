@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Data;
 using System.Dynamic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -27,7 +28,9 @@ namespace Massive.Tests
 			// SQL Server has true Guid type support
 			var db = new DynamicModel(TestConstants.ReadTestConnectionStringName);
 			var guid = Guid.NewGuid();
-			var item = db.Query("SELECT @0 AS val", guid).FirstOrDefault();
+			var command = db.CreateCommand("SELECT @0 AS val", null, guid);
+			Assert.AreEqual(DbType.Guid, command.Parameters[0].DbType);
+			var item = db.Query(command).FirstOrDefault();
 			Assert.AreEqual(guid, item.val);
 		}
 
