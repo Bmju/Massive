@@ -3,14 +3,11 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text;
+using Massive.Tests.PostgreSql.TableClasses;
 using NUnit.Framework;
-using PostgreSql.TableClasses;
 using SD.Tools.OrmProfiler.Interceptor;
 
-using Massive;
-using Massive.Tests;
-
-namespace PostgreSql
+namespace Massive.Tests.PostgreSql
 {
 	/// <summary>
 	/// Specific tests for code which is specific to Postgresql. This means there are fewer tests than for SQL Server, as logic that's covered there already doesn't have to be

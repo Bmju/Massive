@@ -4,10 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-using Massive;
-using Massive.Tests;
-
-namespace PostgreSql.TableClasses
+namespace Massive.Tests.PostgreSql.TableClasses
 {
 	public class SPTestsDatabase : DynamicModel
 	{

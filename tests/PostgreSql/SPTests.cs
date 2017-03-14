@@ -5,11 +5,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Transactions;
-using PostgreSql.TableClasses;
+using Massive.Tests.PostgreSql.TableClasses;
 using NUnit.Framework;
 using SD.Tools.OrmProfiler.Interceptor;
 
-namespace Massive.Tests.Oracle
+namespace Massive.Tests.PostgreSql
 {
 	/// <summary>
 	/// Suite of tests for stored procedures, functions and cursors on PostgreSQL database.
