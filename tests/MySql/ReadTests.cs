@@ -38,7 +38,7 @@ namespace Massive.Tests.MySql
 		public void Guid_Arg()
 		{
 			// MySQL has native Guid parameter support, but the SELECT output is a string
-			var db = new DynamicModel(TestConstants.ReadTestConnectionStringName);
+			var db = new DynamicModel(string.Format(TestConstants.ReadTestConnectionStringName, ProviderName));
 			var guid = Guid.NewGuid();
 			var command = db.CreateCommand("SELECT @0 AS val", null, guid);
 			Assert.AreEqual(DbType.Guid, command.Parameters[0].DbType);
@@ -51,7 +51,7 @@ namespace Massive.Tests.MySql
 		[Test]
 		public void Max_SingleArg()
 		{
-			var soh = new Film();
+			var soh = new Film(ProviderName);
 			var result = ((dynamic)soh).Max(columns: "film_id", where: "rental_duration > @0", args: 6);
 			Assert.AreEqual(988, result);
 		}

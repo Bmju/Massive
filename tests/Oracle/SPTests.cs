@@ -16,9 +16,21 @@ namespace Massive.Tests.Oracle
 	/// Runs against functions and procedures which are created by running SPTests.sql script on the test database.
 	/// These objects do not conflict with anything in the SCOTT database, and can be added there.
 	/// </remarks>
-	[TestFixture]
+	[TestFixture("Oracle.ManagedDataAccess.Client")]
+	[TestFixture("Oracle.DataAccess.Client")]
 	public class SPTests
 	{
+		private string ProviderName;
+
+		/// <summary>
+		/// Initialise tests for given provider
+		/// </summary>
+		/// <param name="providerName">Provider name</param>
+		public SPTests(string providerName)
+		{
+			ProviderName = providerName;
+		}
+
 		[SetUp]
 		public void Setup()
 		{
@@ -29,7 +41,7 @@ namespace Massive.Tests.Oracle
 		public void NormalWhereCall()
 		{
 			// Check that things are up and running normally before trying the new stuff
-			var db = new Department();
+			var db = new Department(ProviderName);
 			var rows = db.All(where: "LOC = :0", args: "Nowhere");
 			Assert.AreEqual(9, rows.ToList().Count);
 		}
@@ -37,7 +49,7 @@ namespace Massive.Tests.Oracle
 		[Test]
 		public void IntegerOutputParam()
 		{
-			var db = new SPTestsDatabase();
+			var db = new SPTestsDatabase(ProviderName);
 			dynamic intResult = db.ExecuteWithParams("begin :a := 1; end;", outParams: new { a = 0 });
 			Assert.AreEqual(1, intResult.a);
 		}
@@ -50,7 +62,7 @@ namespace Massive.Tests.Oracle
 		[Test]
 		public void InitialNullDateOutputParam()
 		{
-			var db = new SPTestsDatabase();
+			var db = new SPTestsDatabase(ProviderName);
 			dynamic dateResult = db.ExecuteWithParams("begin :d := SYSDATE; end;", outParams: new dateNullParam());
 			Assert.AreEqual(typeof(DateTime), dateResult.d.GetType());
 		}
@@ -58,7 +70,7 @@ namespace Massive.Tests.Oracle
 		[Test]
 		public void InputAndOutputParams()
 		{
-			var db = new SPTestsDatabase();
+			var db = new SPTestsDatabase(ProviderName);
 			dynamic procResult = db.ExecuteAsProcedure("findMin", inParams: new { x = 1, y = 3 }, outParams: new { z = 0 });
 			Assert.AreEqual(1, procResult.z);
 		}
@@ -66,7 +78,7 @@ namespace Massive.Tests.Oracle
 		[Test]
 		public void InputAndReturnParams()
 		{
-			var db = new SPTestsDatabase();
+			var db = new SPTestsDatabase(ProviderName);
 			dynamic fnResult = db.ExecuteAsProcedure("findMax", inParams: new { x = 1, y = 3 }, returnParams: new { returnValue = 0 });
 			Assert.AreEqual(3, fnResult.returnValue);
 		}
@@ -79,7 +91,7 @@ namespace Massive.Tests.Oracle
 		[Test]
 		public void InputOutputParam()
 		{
-			var db = new SPTestsDatabase();
+			var db = new SPTestsDatabase(ProviderName);
 			dynamic squareResult = db.ExecuteAsProcedure("squareNum", ioParams: new { x = 4 });
 			Assert.AreEqual(16, squareResult.x);
 		}
@@ -87,7 +99,7 @@ namespace Massive.Tests.Oracle
 		[Test]
 		public void InitialNullInputOutputParam()
 		{
-			var db = new SPTestsDatabase();
+			var db = new SPTestsDatabase(ProviderName);
 			dynamic squareResult = db.ExecuteAsProcedure("squareNum", ioParams: new intNullParam());
 			Assert.AreEqual(null, squareResult.x);
 		}
@@ -95,7 +107,7 @@ namespace Massive.Tests.Oracle
 		[Test]
 		public void SingleRowFromTableValuedFunction()
 		{
-			var db = new SPTestsDatabase();
+			var db = new SPTestsDatabase(ProviderName);
 			var record = db.QueryWithParams("SELECT * FROM table(GET_EMP(:p_EMPNO))", new { p_EMPNO = 7782 }).FirstOrDefault();
 			Assert.AreEqual(7782, record.EMPNO);
 			Assert.AreEqual("CLARK", record.ENAME);
@@ -104,7 +116,7 @@ namespace Massive.Tests.Oracle
 		[Test]
 		public void DereferenceCursorValuedFunction()
 		{
-			var db = new SPTestsDatabase();
+			var db = new SPTestsDatabase(ProviderName);
 			// Oracle function one cursor return value
 			var employees = db.QueryFromProcedure("get_dept_emps", inParams: new { p_DeptNo = 10 }, returnParams: new { v_rc = new Cursor() });
 			int count = 0;
@@ -119,7 +131,7 @@ namespace Massive.Tests.Oracle
 		[Test]
 		public void DereferenceCursorOutputParameter()
 		{
-			var db = new SPTestsDatabase();
+			var db = new SPTestsDatabase(ProviderName);
 			// Oracle procedure one cursor output variables
 			var moreEmployees = db.QueryFromProcedure("myproc", outParams: new { prc = new Cursor() });
 			int count = 0;
@@ -134,7 +146,7 @@ namespace Massive.Tests.Oracle
 		[Test]
 		public void QueryMultipleFromTwoOutputCursors()
 		{
-			var db = new SPTestsDatabase();
+			var db = new SPTestsDatabase(ProviderName);
 			// Oracle procedure two cursor output variables
 			var twoSets = db.QueryMultipleFromProcedure("tworesults", outParams: new { prc1 = new Cursor(), prc2 = new Cursor() });
 			int sets = 0;
@@ -157,7 +169,7 @@ namespace Massive.Tests.Oracle
 		[Test]
 		public void NonQueryWithTwoOutputCursors()
 		{
-			var db = new SPTestsDatabase();
+			var db = new SPTestsDatabase(ProviderName);
 			var twoSetDirect = db.ExecuteAsProcedure("tworesults", outParams: new { prc1 = new Cursor(), prc2 = new Cursor() });
 			Assert.AreEqual("OracleRefCursor", twoSetDirect.prc1.GetType().Name);
 			Assert.AreEqual("OracleRefCursor", twoSetDirect.prc2.GetType().Name);
@@ -166,7 +178,7 @@ namespace Massive.Tests.Oracle
 		[Test]
 		public void QueryFromMixedCursorOutput()
 		{
-			var db = new SPTestsDatabase();
+			var db = new SPTestsDatabase(ProviderName);
 			var mixedSets = db.QueryMultipleFromProcedure("mixedresults", outParams: new { prc1 = new Cursor(), prc2 = new Cursor(), num1 = 0, num2 = 0 });
 			int sets = 0;
 			int[] counts = new int[2];
@@ -188,7 +200,7 @@ namespace Massive.Tests.Oracle
 		[Test]
 		public void NonQueryFromMixedCursorOutput()
 		{
-			var db = new SPTestsDatabase();
+			var db = new SPTestsDatabase(ProviderName);
 			var mixedDirect = db.ExecuteAsProcedure("mixedresults", outParams: new { prc1 = new Cursor(), prc2 = new Cursor(), num1 = 0, num2 = 0 });
 			Assert.AreEqual("OracleRefCursor", mixedDirect.prc1.GetType().Name);
 			Assert.AreEqual("OracleRefCursor", mixedDirect.prc2.GetType().Name);
@@ -199,7 +211,7 @@ namespace Massive.Tests.Oracle
 		[Test]
 		public void PassingCursorInputParameter()
 		{
-			var db = new SPTestsDatabase();
+			var db = new SPTestsDatabase(ProviderName);
 			// To share cursors between commands in Oracle the commands must use the same connection
 			using(var conn = db.OpenConnection())
 			{

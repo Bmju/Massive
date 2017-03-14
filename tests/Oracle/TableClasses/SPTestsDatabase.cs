@@ -8,7 +8,7 @@ namespace Massive.Tests.Oracle.TableClasses
 {
 	public class SPTestsDatabase : DynamicModel
 	{
-		public SPTestsDatabase() : base(TestConstants.ReadWriteTestConnectionStringName)
+		public SPTestsDatabase(string providerName) : base(string.Format(TestConstants.ReadWriteTestConnectionStringName, providerName))
 		{
 		}
 	}

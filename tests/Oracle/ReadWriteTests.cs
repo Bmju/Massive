@@ -42,7 +42,7 @@ namespace Massive.Tests.Oracle
 		public void Guid_Arg()
 		{
 			// Oracle has no Guid parameter support, Massive maps Guid to string in Oracle
-			var db = new DynamicModel(TestConstants.ReadWriteTestConnectionStringName);
+			var db = new DynamicModel(string.Format(TestConstants.ReadWriteTestConnectionStringName, ProviderName));
 			var guid = Guid.NewGuid();
 			var inParams = new { inval = guid };
 			var outParams = new { val = new Guid() };
