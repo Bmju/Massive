@@ -1998,13 +1998,28 @@ namespace Massive
 	public class ConfigurationBasedConnectionStringProvider : IConnectionStringProvider
 	{
 		/// <summary>
+		/// Return ConnectionStringSettings from name, exception if missing
+		/// </summary>
+		/// <param name="connectionStringName">Name of the connection string.</param>
+		/// <returns></returns>
+		private ConnectionStringSettings GetConnectionStringSettings(string connectionStringName)
+		{
+			var result = ConfigurationManager.ConnectionStrings[connectionStringName];
+			if (result == null)
+			{
+				throw new InvalidOperationException("Missing connection string \""+ connectionStringName + "\"");
+			}
+			return result;
+		}
+
+		/// <summary>
 		/// Gets the name of the provider which is the name of the DbProviderFactory specified in the connection string stored under the name specified.
 		/// </summary>
 		/// <param name="connectionStringName">Name of the connection string.</param>
 		/// <returns></returns>
 		public string GetProviderName(string connectionStringName)
 		{
-			var providerName = ConfigurationManager.ConnectionStrings[connectionStringName].ProviderName;
+			var providerName = GetConnectionStringSettings(connectionStringName).ProviderName;
 			return !string.IsNullOrWhiteSpace(providerName) ? providerName : null;
 		}
 
@@ -2015,7 +2030,7 @@ namespace Massive
 		/// <returns></returns>
 		public string GetConnectionString(string connectionStringName)
 		{
-			return ConfigurationManager.ConnectionStrings[connectionStringName].ConnectionString;
+			return GetConnectionStringSettings(connectionStringName).ConnectionString;
 		}
 	}
 }
