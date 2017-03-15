@@ -523,7 +523,11 @@ namespace Massive
 				//_providerName = "System.Data.SQLite";
 				//_providerName = "MySql.Data.MySqlClient";
 				//_providerName = "Devart.Data.MySql";
-				throw new NotSupportedException("Hard-coded provider name is now deprecated in Massive: you are recommended to use ProviderName=\"...\" in your connection string definition, but you may edit Massive.Shared.cs (look for this exception message) to hard code the value for backwards compatibility");
+				throw new NotSupportedException("Hard-coded provider name support is deprecated in Massive:" +
+												" if you are using a config file then add an additional ProviderName=\"...\" attribute" +
+												" next to your ConnectionString=\"...\" attribute (or for other configuration options update your own IConnectionStringProvider implementation);" +
+												" to restore this feature for backwards compatibility please edit Massive.Shared.cs" +
+												" (look for this exception message and you will find the required code)");
 			}
 			_factory = DbProviderFactories.GetFactory(_providerName);
 			_connectionString = connectionStringProvider.GetConnectionString(connectionStringName);
