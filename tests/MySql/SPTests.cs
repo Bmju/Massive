@@ -41,15 +41,14 @@ namespace Massive.Tests.MySql
 		public void Procedure_Call()
 		{
 			var db = new SPTestsDatabase(ProviderName);
-			var result = db.ExecuteAsProcedure("rewards_report_for_date", inParams: new { min_monthly_purchases = 3, min_dollar_amount_purchased = 20, report_date = new DateTime(2005, 1, 1) }, returnParams: new { count_rewardees = 0 });
+			var result = db.ExecuteAsProcedure("rewards_report_for_date", inParams: new { min_monthly_purchases = 3, min_dollar_amount_purchased = 20, report_date = new DateTime(2005, 5, 1) }, outParams: new { count_rewardees = 0 });
 			Assert.AreEqual(27, result.count_rewardees);
 		}
 
 
 		/// <remarks>
-		/// Both MySQL drivers create a typed param from a bool value, but the type is not bool, and is different in each case.
-		/// All the output casting and almost all the input casting of Massive works by using the default operation of
-		/// the various ADO.NET drivers so (for now?) we don't try to fix this, we just document it here.
+		/// What Devart is doing with the the type here is unexpected, but for now we just document it.
+		/// Although SByte looks surprising in MySQL, it maps directly to TINYINT (as opposed to TINYINT UNSIGNED) and is a plausible thing to map to.
 		/// </remarks>
 		[Test]
 		public void Function_Call_Bool()
@@ -57,14 +56,11 @@ namespace Massive.Tests.MySql
 			var db = new SPTestsDatabase(ProviderName);
 			if(ProviderName == "Devart.Data.MySql")
 			{
-				var conn = db.OpenConnection();
-				var cmd = db.CreateCommandWithParams("inventory_in_stock", isProcedure: true, connection: conn);
-				((dynamic)cmd).ParameterCheck = true;
-				((dynamic)cmd).Prepare();
-				Assert.AreEqual(DbType.Int64, cmd.Parameters["@retval"].DbType);
-				db.ExecuteWithParams(string.Empty, command: cmd, connection: conn);
+				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = false }, isProcedure: true);
+				Assert.AreEqual(DbType.Int64, cmd.Parameters["retval"].DbType);
+				db.Execute(cmd);
 				var result = cmd.ResultsAsDynamic();
-				Assert.AreEqual((long)1, (object)result.retval);
+				Assert.AreEqual((byte)1, (object)result.retval);
 			}
 			else
 			{
@@ -78,33 +74,52 @@ namespace Massive.Tests.MySql
 
 
 		/// <remarks>
-		/// What Devart is doing with the the type here is unexpected, but (for now?) we just document it.
+		/// What Devart is doing with the the type here is unexpected, but for now we just document it.
 		/// </remarks>
 		[Test]
 		public void Function_Call_Byte()
 		{
 			var db = new SPTestsDatabase(ProviderName);
-			var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = (byte)1 }, isProcedure: true);
 			if(ProviderName == "Devart.Data.MySql")
 			{
-				((dynamic)cmd).ParameterCheck = true;
-			}
-			if(ProviderName == "Devart.Data.MySql")
-			{
-				Assert.AreEqual(DbType.Int16, cmd.Parameters["@retval"].DbType);
-			}
-			else
-			{
-				Assert.AreEqual(DbType.Byte, cmd.Parameters["@retval"].DbType);
-			}
-			db.Execute(cmd);
-			var result = cmd.ResultsAsDynamic();
-			if(ProviderName == "Devart.Data.MySql")
-			{
+				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = (byte)1 }, isProcedure: true);
+				Assert.AreEqual(DbType.Int16, cmd.Parameters["retval"].DbType);
+				db.Execute(cmd);
+				var result = cmd.ResultsAsDynamic();
 				Assert.AreEqual((short)1, (object)result.retval);
 			}
 			else
 			{
+				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = (byte)1 }, isProcedure: true);
+				Assert.AreEqual(DbType.Byte, cmd.Parameters["@retval"].DbType);
+				db.Execute(cmd);
+				var result = cmd.ResultsAsDynamic();
+				Assert.AreEqual((byte)1, (object)result.retval);
+			}
+		}
+
+
+		/// <remarks>
+		/// What Devart is doing with the the type here is unexpected, but for now we just document it.
+		/// </remarks>
+		[Test]
+		public void Function_Call_SByte()
+		{
+			var db = new SPTestsDatabase(ProviderName);
+			if(ProviderName == "Devart.Data.MySql")
+			{
+				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = (sbyte)1 }, isProcedure: true);
+				Assert.AreEqual(DbType.Int16, cmd.Parameters["retval"].DbType);
+				db.Execute(cmd);
+				var result = cmd.ResultsAsDynamic();
+				Assert.AreEqual((short)1, (object)result.retval);
+			}
+			else
+			{
+				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = (sbyte)1 }, isProcedure: true);
+				Assert.AreEqual(DbType.SByte, cmd.Parameters["@retval"].DbType);
+				db.Execute(cmd);
+				var result = cmd.ResultsAsDynamic();
 				Assert.AreEqual((byte)1, (object)result.retval);
 			}
 		}
@@ -120,14 +135,29 @@ namespace Massive.Tests.MySql
 		}
 
 
+		/// <summary>
+		/// Now we can ask Massive to read the query results AND get the param values. Cool.
+		/// 
+		/// Because of yield return execution, results are definitely not available until at least one item has been read back.
+		/// Becasue of the ADO.NET driver, results may not be available until all of the values have been read back (REF).
+		/// </summary>
 		[Test]
 		public void Procedure_Call_Query_Plus_Results()
 		{
 			var db = new SPTestsDatabase(ProviderName);
 
-			var inParams = new { min_monthly_purchases = 3, min_dollar_amount_purchased = 20, report_date = new DateTime(2005, 1, 1) };
-			var outParams = new { count_rewardees = 0 };
-			var command = db.CreateCommandWithParams("rewards_report_for_date", inParams: inParams, outParams: outParams, isProcedure: true);
+			var command = db.CreateCommandWithParams("rewards_report_for_date",
+													 inParams: new
+													 {
+														 min_monthly_purchases = 3,
+														 min_dollar_amount_purchased = 20,
+														 report_date = new DateTime(2005, 5, 1)
+													 },
+													 outParams: new
+													 {
+														 count_rewardees = 0
+													 },
+													 isProcedure: true);
 
 			var resultset = db.Query(command);
 
@@ -140,12 +170,48 @@ namespace Massive.Tests.MySql
 				Assert.AreEqual(typeof(DateTime), item.create_date.GetType());
 			}
 
-			// Now we can ask Massive to read the query results AND get the param values. Cool.
-			// Because of yield return execution, results are not available until at least one item has been read back
 			var results = command.ResultsAsDynamic();
 
 			Assert.Greater(results.count_rewardees, 0);
 			Assert.AreEqual(count, results.count_rewardees);
 		}
+
+
+		// Massive style calls to some examples from https://www.devart.com/dotconnect/mysql/docs/Parameters.html#inoutparams
+		#region Devart Examples
+		[Test]
+		public void In_Out_Params_SQL()
+		{
+			var _providerName = ProviderName;
+			if (ProviderName == "MySql.Data.MySqlClient")
+			{
+				_providerName += ", AllowUserVariables=true";
+			}
+			var db = new SPTestsDatabase(_providerName);
+			// old skool SQL
+			// this approach only works on the Oracle/MySQL driver if "AllowUserVariables=true" is included in the connection string
+			var result = db.Scalar("CALL testproc_in_out(10, @param2); SELECT @param2");
+			Assert.AreEqual(20, result);
+		}
+
+
+		[Test]
+		public void In_Out_Params_SP()
+		{
+			var db = new SPTestsDatabase(ProviderName);
+			// new skool
+			var result = db.ExecuteAsProcedure("testproc_in_out", inParams: new { param1 = 10 }, outParams: new { param2 = 0 });
+			Assert.AreEqual(20, result.param2);
+		}
+
+
+		[Test]
+		public void InOut_Param_SP()
+		{
+			var db = new SPTestsDatabase(ProviderName);
+			var result = db.ExecuteAsProcedure("testproc_inout", ioParams: new { param1 = 10 });
+			Assert.AreEqual(20, result.param1);
+		}
+		#endregion
 	}
 }
