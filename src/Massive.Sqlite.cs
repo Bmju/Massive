@@ -233,9 +233,9 @@ namespace Massive
 		/// </summary>
 		/// <param name="rawName">raw name of the parameter, without parameter prefix</param>
 		/// <returns>rawName prefixed with the db specific prefix (if any)</returns>
-		internal static string PrefixParameterName(string rawName, bool forDbParamObject = false)
+		internal static string PrefixParameterName(string rawName, DbCommand cmd = null)
 		{
-			return forDbParamObject ? rawName : ("@" + rawName);
+			return (cmd != null) ? rawName : ("@" + rawName);
 		}
 
 
@@ -244,7 +244,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="rawName">The name of the parameter, prefixed if we prefixed it above</param>
 		/// <returns>raw name</returns>
-		internal static string DeprefixParameterName(string dbParamName)
+		internal static string DeprefixParameterName(string dbParamName, DbCommand cmd)
 		{
 			return dbParamName;
 		}

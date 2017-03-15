@@ -94,7 +94,7 @@ namespace Massive
 			}
 			else
 			{
-				p.ParameterName = DynamicModel.PrefixParameterName(name ?? cmd.Parameters.Count.ToString(), true);
+				p.ParameterName = DynamicModel.PrefixParameterName(name ?? cmd.Parameters.Count.ToString(), cmd);
 			}
 			p.SetDirection(direction);
 			if(value == null)
@@ -229,7 +229,7 @@ namespace Massive
 				var param = cmd.Parameters[i];
 				if(param.Direction != ParameterDirection.Input)
 				{
-					var name = DynamicModel.DeprefixParameterName(param.ParameterName);
+					var name = DynamicModel.DeprefixParameterName(param.ParameterName, cmd);
 					var value = param.Value;
 					resultDictionary.Add(name, value == DBNull.Value ? null : value);
 				}

@@ -265,9 +265,9 @@ namespace Massive
 		/// cheaper to execute - of never prefixing internally, works for all cases and all providers except
 		/// for the Devart provider for MySQL.)
 		/// </remarks>
-		internal static string PrefixParameterName(string rawName, bool forDbParamObject = false)
+		internal static string PrefixParameterName(string rawName, DbCommand cmd = null)
 		{
-			return forDbParamObject ? rawName : (":" + rawName);
+			return (cmd != null) ? rawName : (":" + rawName);
 		}
 
 
@@ -276,7 +276,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="rawName">The name of the parameter, prefixed if we prefixed it above</param>
 		/// <returns>raw name</returns>
-		internal static string DeprefixParameterName(string dbParamName)
+		internal static string DeprefixParameterName(string dbParamName, DbCommand cmd)
 		{
 			return dbParamName;
 		}
