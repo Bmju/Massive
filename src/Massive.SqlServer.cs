@@ -87,6 +87,11 @@ namespace Massive
 		/// </summary>
 		/// <param name="p">The parameter.</param>
 		/// <returns>true if this is a cursor parameter.</returns>
+		/// <remarks>
+		/// There is no such thing as a Cursor SqlDbType for SqlParameter in System.Data.SqlClient (unlike, e.g., Oracle and PostgreSQL).
+		/// In T-SQL a cursor is not for passing references to result sets around (T-SQL does that automatically) it is just for *single
+		/// stepping* through a result set (and it would be an even worse idea to do that controlled from C#, if it was made possible to).
+		/// </remarks>
 		private static bool IsCursor(this DbParameter p)
 		{
 			return false;

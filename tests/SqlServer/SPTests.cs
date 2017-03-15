@@ -145,9 +145,7 @@ namespace Massive.Tests.Oracle
 		}
 
 		/// <remarks>
-		/// There is no such thing as a Cursor SqlDbType for SqlParameter in System.Data.SqlClient (unlike in Oracle and PostgreSQL).
-		/// In T-SQL a cursor is not for passing references to result sets around (T-SQL does that automatically) it is JUST for single
-		/// stepping through a result set, and it would be an even worse idea to do that controlled from C#, if it was possible to.
+		/// See comments on IsCursor() in Massive.SqlServer.cs
 		/// </remarks>
 		[Test]
 		public void DereferenceCursor()
