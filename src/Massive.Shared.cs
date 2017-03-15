@@ -220,7 +220,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="cmd">The command from which to read the parameter values.</param>
 		/// <returns></returns>
-		public static dynamic ResultsAsDynamic(this DbCommand cmd)
+		public static dynamic ResultsAsExpando(this DbCommand cmd)
 		{
 			dynamic result = new ExpandoObject();
 			var resultDictionary = (IDictionary<string, object>)result;
@@ -825,6 +825,19 @@ namespace Massive
 
 
 		/// <summary>
+		/// Executes the specified command using a new connection
+		/// TO DO: Test this!
+		/// </summary>
+		/// <param name="command">The command to execute.</param>
+		/// <param name="connection">The connection to use with the command.</param>
+		/// <returns>the value returned by the database after executing the command. </returns>
+		public virtual int Execute(DbCommand command, DbConnection connection)
+		{
+			return ExecuteWithParams(string.Empty, connection: connection, command: command);
+		}
+
+
+		/// <summary>
 		/// Executes the specified SQL as a new command using a new connection. 
 		/// </summary>
 		/// <param name="sql">The SQL statement to execute as a command.</param>
@@ -872,6 +885,17 @@ namespace Massive
 
 
 		/// <summary>
+		/// Executes a prepared command with optional parameters
+		/// </summary>
+		/// <param name="command">The command to execute.</param>
+		/// <returns>Dynamic holding return values of any output, input-output and return parameters.</returns>
+		public dynamic ExecuteWithParams(DbCommand command)
+		{
+			return ExecuteWithParams(string.Empty, command: command);
+		}
+
+
+		/// <summary>
 		/// Execute procedure, function or specified SQL with optional directional parameters, send back the return values of all non-input parameters in a dynamic object.
 		/// For each set of parameters, you can pass in an Anonymous object, an ExpandoObject, a regular old POCO, or a NameValueCollection e.g. from a Request.Form or Request.QueryString.
 		/// </summary>
@@ -905,7 +929,7 @@ namespace Massive
 				else
 				{
 					command.ExecuteNonQuery();
-					return command.ResultsAsDynamic();
+					return command.ResultsAsExpando();
 				}
 			}
 		}

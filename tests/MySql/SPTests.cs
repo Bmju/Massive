@@ -59,7 +59,7 @@ namespace Massive.Tests.MySql
 				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = false }, isProcedure: true);
 				Assert.AreEqual(DbType.Int64, cmd.Parameters["retval"].DbType);
 				db.Execute(cmd);
-				var result = cmd.ResultsAsDynamic();
+				var result = cmd.ResultsAsExpando();
 				Assert.AreEqual((byte)1, (object)result.retval);
 			}
 			else
@@ -67,7 +67,7 @@ namespace Massive.Tests.MySql
 				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = false }, isProcedure: true);
 				Assert.AreEqual(DbType.SByte, cmd.Parameters["@retval"].DbType);
 				db.Execute(cmd);
-				var result = cmd.ResultsAsDynamic();
+				var result = cmd.ResultsAsExpando();
 				Assert.AreEqual((byte)1, (object)result.retval);
 			}
 		}
@@ -85,7 +85,7 @@ namespace Massive.Tests.MySql
 				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = (byte)1 }, isProcedure: true);
 				Assert.AreEqual(DbType.Int16, cmd.Parameters["retval"].DbType);
 				db.Execute(cmd);
-				var result = cmd.ResultsAsDynamic();
+				var result = cmd.ResultsAsExpando();
 				Assert.AreEqual((short)1, (object)result.retval);
 			}
 			else
@@ -93,7 +93,7 @@ namespace Massive.Tests.MySql
 				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = (byte)1 }, isProcedure: true);
 				Assert.AreEqual(DbType.Byte, cmd.Parameters["@retval"].DbType);
 				db.Execute(cmd);
-				var result = cmd.ResultsAsDynamic();
+				var result = cmd.ResultsAsExpando();
 				Assert.AreEqual((byte)1, (object)result.retval);
 			}
 		}
@@ -111,7 +111,7 @@ namespace Massive.Tests.MySql
 				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = (sbyte)1 }, isProcedure: true);
 				Assert.AreEqual(DbType.Int16, cmd.Parameters["retval"].DbType);
 				db.Execute(cmd);
-				var result = cmd.ResultsAsDynamic();
+				var result = cmd.ResultsAsExpando();
 				Assert.AreEqual((short)1, (object)result.retval);
 			}
 			else
@@ -119,7 +119,7 @@ namespace Massive.Tests.MySql
 				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = (sbyte)1 }, isProcedure: true);
 				Assert.AreEqual(DbType.SByte, cmd.Parameters["@retval"].DbType);
 				db.Execute(cmd);
-				var result = cmd.ResultsAsDynamic();
+				var result = cmd.ResultsAsExpando();
 				Assert.AreEqual((byte)1, (object)result.retval);
 			}
 		}
@@ -170,7 +170,7 @@ namespace Massive.Tests.MySql
 				Assert.AreEqual(typeof(DateTime), item.create_date.GetType());
 			}
 
-			var results = command.ResultsAsDynamic();
+			var results = command.ResultsAsExpando();
 
 			Assert.Greater(results.count_rewardees, 0);
 			Assert.AreEqual(count, results.count_rewardees);
