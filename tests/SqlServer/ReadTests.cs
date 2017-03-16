@@ -347,11 +347,29 @@ namespace Massive.Tests
 
 
 		[Test]
-		public void Count_WhereSpecification()
+		public void Count_WhereSpecification_FromArgs()
 		{
 			var soh = new SalesOrderHeader();
-			var total = soh.Count(where: "WHERE CustomerId=@0", args:30052);
-			Assert.AreEqual(4, total);
+			var total = soh.Count(where: "WHERE CustomerId=@0", args:11212);
+			Assert.AreEqual(17, total);
+		}
+
+
+		[Test]
+		public void Count_WhereSpecification_FromArgsPlusNameValue()
+		{
+			dynamic soh = new SalesOrderHeader();
+			var total = soh.Count(where: "WHERE CustomerId=@0", args: 11212, ModifiedDate: new DateTime(2013, 10, 10));
+			Assert.AreEqual(2, total);
+		}
+
+
+		[Test]
+		public void Count_WhereSpecification_FromNameValuePairs()
+		{
+			dynamic soh = new SalesOrderHeader();
+			var total = soh.Count(CustomerID: 11212, ModifiedDate: new DateTime(2013, 10, 10));
+			Assert.AreEqual(2, total);
 		}
 
 
