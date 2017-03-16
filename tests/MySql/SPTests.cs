@@ -44,91 +44,55 @@ namespace Massive.Tests.MySql
 
 
 		/// <remarks>
-		/// What Devart is doing with the the type here is unexpected, but for now we just document it.
-		/// Although SByte looks surprising in MySQL, it maps directly to TINYINT (as opposed to TINYINT UNSIGNED) and is a plausible thing to map to.
+		/// There's some non-trivial work behind the scenes in Massive.MySql.cs to make the two 
+		/// providers return a bool when we expect them to.
 		/// </remarks>
 		[Test]
 		public void Function_Call_Bool()
 		{
 			var db = new SPTestsDatabase(ProviderName);
-			if(ProviderName == "Devart.Data.MySql")
-			{
-				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = false }, isProcedure: true);
-				Assert.AreEqual(DbType.Int64, cmd.Parameters["retval"].DbType);
-				db.Execute(cmd);
-				var result = cmd.ResultsAsExpando();
-				Assert.AreEqual((byte)1, (object)result.retval);
-			}
-			else
-			{
-				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = false }, isProcedure: true);
-				Assert.AreEqual(DbType.SByte, cmd.Parameters["@retval"].DbType);
-				db.Execute(cmd);
-				var result = cmd.ResultsAsExpando();
-				Assert.AreEqual((byte)1, (object)result.retval);
-			}
+			var result = db.ExecuteAsProcedure("inventory_in_stock",
+											   inParams: new { p_inventory_id = 5 },
+											   returnParams: new { retval = false });
+			Assert.AreEqual(true, result.retval);
 		}
 
 
 		/// <remarks>
-		/// What Devart is doing with the the type here is unexpected, but for now we just document it.
+		/// Devart doesn't have an unsigned byte type, so has to put 0-255 into a short
 		/// </remarks>
 		[Test]
 		public void Function_Call_Byte()
 		{
 			var db = new SPTestsDatabase(ProviderName);
+			var result = db.ExecuteAsProcedure("inventory_in_stock",
+											   inParams: new { p_inventory_id = 5 },
+											   returnParams: new { retval = (byte)1 });
 			if(ProviderName == "Devart.Data.MySql")
 			{
-				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = (byte)1 }, isProcedure: true);
-				Assert.AreEqual(DbType.Int16, cmd.Parameters["retval"].DbType);
-				db.Execute(cmd);
-				var result = cmd.ResultsAsExpando();
-				Assert.AreEqual((short)1, (object)result.retval);
+				Assert.AreEqual(typeof(short), result.retval.GetType());
 			}
 			else
 			{
-				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = (byte)1 }, isProcedure: true);
-				Assert.AreEqual(DbType.Byte, cmd.Parameters["@retval"].DbType);
-				db.Execute(cmd);
-				var result = cmd.ResultsAsExpando();
-				Assert.AreEqual((byte)1, (object)result.retval);
+				Assert.AreEqual(typeof(byte), result.retval.GetType());
 			}
+			Assert.AreEqual(1, result.retval);
 		}
 
 
 		/// <remarks>
-		/// What Devart is doing with the the type here is unexpected, but for now we just document it.
+		/// Again there's some non-trivial work behind the scenes in Massive.MySql.cs to make both 
+		/// providers return a signed byte when we expect them to.
 		/// </remarks>
 		[Test]
 		public void Function_Call_SByte()
 		{
 			var db = new SPTestsDatabase(ProviderName);
-			if(ProviderName == "Devart.Data.MySql")
-			{
-				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = (sbyte)1 }, isProcedure: true);
-				Assert.AreEqual(DbType.Int16, cmd.Parameters["retval"].DbType);
-				db.Execute(cmd);
-				var result = cmd.ResultsAsExpando();
-				Assert.AreEqual((short)1, (object)result.retval);
-			}
-			else
-			{
-				var cmd = db.CreateCommandWithParams("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = (sbyte)1 }, isProcedure: true);
-				Assert.AreEqual(DbType.SByte, cmd.Parameters["@retval"].DbType);
-				db.Execute(cmd);
-				var result = cmd.ResultsAsExpando();
-				Assert.AreEqual((byte)1, (object)result.retval);
-			}
-		}
-
-
-		[Test]
-		public void Function_Call_Simple()
-		{
-			var db = new SPTestsDatabase(ProviderName);
-			var result = db.ExecuteAsProcedure("inventory_in_stock", inParams: new { p_inventory_id = 5 }, returnParams: new { retval = false });
-			// 1 database casts it as SByte, the other as Int64 (!!)
-			Assert.AreEqual((long)1, (long)result.retval);
+			var result = db.ExecuteAsProcedure("inventory_in_stock",
+											   inParams: new { p_inventory_id = 5 },
+											   returnParams: new { retval = (sbyte)1 });
+			Assert.AreEqual(typeof(sbyte), result.retval.GetType());
+			Assert.AreEqual(1, result.retval);
 		}
 
 
@@ -180,7 +144,7 @@ namespace Massive.Tests.MySql
 		public void In_Out_Params_SQL()
 		{
 			var _providerName = ProviderName;
-			if (ProviderName == "MySql.Data.MySqlClient")
+			if(ProviderName == "MySql.Data.MySqlClient")
 			{
 				_providerName += ", AllowUserVariables=true";
 			}

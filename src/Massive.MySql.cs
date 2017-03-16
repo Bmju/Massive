@@ -133,7 +133,49 @@ namespace Massive
 			if(valueAsString != null)
 			{
 				p.Size = valueAsString.Length > 4000 ? -1 : 4000;
+				return;
 			}
+			var valueAsBool = value as bool?;
+			if(valueAsBool != null)
+			{
+				// This is required for our bool fix-up for Oracle/MySQL, and does not change a thing on Devart
+				p.DbType = DbType.Boolean;
+				return;
+			}
+			var valueAsSByte = value as sbyte?;
+			if(valueAsSByte != null)
+			{
+				// we have to set this to what it is to ensure they know we don't want it to change
+				p.SetRuntimeEnumProperty("MySqlType", "TinyInt", false);
+				return;
+			}
+		}
+
+
+		/// <summary>
+		/// Extension to get the output Value from single parameter, adding support for provider unsupported types, etc.
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		private static object GetValue(this DbParameter p)
+		{
+			object value = p.Value;
+			if(value == DBNull.Value)
+			{
+				return value;
+			}
+			if(p.DbType == DbType.Boolean)
+			{
+				return (1 == Convert.ToInt32(value));
+			}
+			if(p.GetRuntimeEnumProperty("MySqlType") == "Bit")
+			{
+				return (1 == Convert.ToInt32(value));
+			}
+			if(p.GetRuntimeEnumProperty("MySqlType") == "TinyInt")
+			{
+				return Convert.ToSByte(value);
+			}
+			return value;
 		}
 	}
 

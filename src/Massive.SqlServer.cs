@@ -145,6 +145,16 @@ namespace Massive
 				p.Size = valueAsString.Length > 4000 ? -1 : 4000;
 			}
 		}
+
+
+		/// <summary>
+		/// Extension to get the output Value from single parameter, adding support for provider unsupported types, etc.
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		private static object GetValue(this DbParameter p)
+		{
+			return p.Value;
+		}
 	}
 
 

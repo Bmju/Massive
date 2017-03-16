@@ -230,7 +230,7 @@ namespace Massive
 				if(param.Direction != ParameterDirection.Input)
 				{
 					var name = DynamicModel.DeprefixParameterName(param.ParameterName, cmd);
-					var value = param.Value;
+					var value = param.GetValue();
 					resultDictionary.Add(name, value == DBNull.Value ? null : value);
 				}
 			}
@@ -312,10 +312,14 @@ namespace Massive
 		/// <param name="o">The object.</param>
 		/// <param name="enumPropertyName">The name of the public enum property to modify.</param>
 		/// <param name="enumStringValue">The string name of the enum value to set.</param>
-		public static void SetRuntimeEnumProperty(this object o, string enumPropertyName, string enumStringValue)
+		public static void SetRuntimeEnumProperty(this object o, string enumPropertyName, string enumStringValue, bool throwException = true)
 		{
-			// Both these lines can be simpler in .NET 4.5
+			// Both the property lines can be simpler in .NET 4.5
 			PropertyInfo pinfoEnumProperty = o.GetType().GetProperties().Where(property => property.Name == enumPropertyName).FirstOrDefault();
+			if (pinfoEnumProperty == null && throwException == false)
+			{
+				return;
+			}
 			pinfoEnumProperty.SetValue(o, Enum.Parse(pinfoEnumProperty.PropertyType, enumStringValue), null);
 		}
 
@@ -330,7 +334,7 @@ namespace Massive
 		{
 			// Both these lines can be simpler in .NET 4.5
 			PropertyInfo pinfoEnumProperty = o.GetType().GetProperties().Where(property => property.Name == enumPropertyName).FirstOrDefault();
-			return pinfoEnumProperty.GetValue(o, null).ToString();
+			return pinfoEnumProperty == null ? null : pinfoEnumProperty.GetValue(o, null).ToString();
 		}
 
 
