@@ -373,6 +373,18 @@ namespace Massive.Tests
 		}
 
 
+		/// <remarks>
+		/// With correct brackets round the WHERE condition in the SQL this returns 17, otherwise it returns 31465!
+		/// </remarks>
+		[Test]
+		public void Count_TestWhereWrapping()
+		{
+			dynamic soh = new SalesOrderHeader();
+			var total = soh.Count(where: "1=1 OR 0=0", CustomerID: 11212);
+			Assert.AreEqual(17, total);
+		}
+
+
 		[Test]
 		public void DefaultValue()
 		{
