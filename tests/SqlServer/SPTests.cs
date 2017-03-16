@@ -8,7 +8,7 @@ using Massive.Tests.TableClasses;
 using NUnit.Framework;
 using SD.Tools.OrmProfiler.Interceptor;
 
-namespace Massive.Tests.Oracle
+namespace Massive.Tests
 {
 	/// <summary>
 	/// Suite of tests for stored procedures and functions on SQL Server database.
