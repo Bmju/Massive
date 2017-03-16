@@ -792,9 +792,9 @@ namespace Massive
 		/// <param name="connection">The connection to use (optional), has to be open if present.</param>
 		/// <param name="args">Traditional Massive auto-named arguments, if present these are added before the named params.</param>
 		/// <returns>first value returned from the query executed or null of no result was returned by the database.</returns>
-		public virtual object ScalarWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, DbConnection connection = null, params object[] args)
+		public virtual object ScalarWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false, DbConnection connection = null, params object[] args)
 		{
-			return ExecuteWithParams(sql, inParams, outParams, ioParams, returnParams, false, true, connection, null, args);
+			return ExecuteWithParams(sql, inParams, outParams, ioParams, returnParams, isProcedure, true, connection, null, args);
 		}
 
 
@@ -1356,7 +1356,7 @@ namespace Massive
 		{
 			var scalarQueryPattern = this.GetCountRowQueryPattern();
 			scalarQueryPattern += ReadifyWhereClause(where);
-			return Convert.ToInt32(ScalarWithParams(string.Format(scalarQueryPattern, string.IsNullOrEmpty(tableName) ? this.TableName : tableName), inParams, outParams, ioParams, returnParams, connection, args));
+			return Convert.ToInt32(ScalarWithParams(string.Format(scalarQueryPattern, string.IsNullOrEmpty(tableName) ? this.TableName : tableName), inParams, outParams, ioParams, returnParams, false, connection, args));
 		}
 
 
@@ -1394,8 +1394,8 @@ namespace Massive
 			{
 				for(int i = 0; i < args.Length; i++)
 				{
-					var name = info.ArgumentNames[i].ToLowerInvariant();
-					switch(name)
+					var name = info.ArgumentNames[i];
+					switch(name.ToLowerInvariant())
 					{
 						case "orderby":
 							orderByClauseFragment = " ORDER BY " + args[i];
@@ -1404,7 +1404,8 @@ namespace Massive
 							columns = args[i].ToString();
 							break;
 						case "where":
-							wherePredicates.Add("( " + args[i].ToString() + " )");
+							// this is an arbitrary SQL WHERE specification
+							wherePredicates.Add("( " + this.ReadifyWhereClause(args[i].ToString()).Substring(" WHERE ".Length) + " )");
 							break;
 						case "args":
 							userArgs = args[i] as object[];

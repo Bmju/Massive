@@ -186,12 +186,13 @@ namespace Massive.Tests.Oracle
 			Assert.AreEqual(105, fastCount);
 		}
 
-		//[Test]
-		//public void ScalarFromProcedure()
-		//{
-		//	var db = new SPTestDatabase();
-		//	// TO DO
-		//}
+		[Test]
+		public void ScalarFromProcedure()
+		{
+			var db = new SPTestsDatabase();
+			var value = db.ScalarWithParams("uspCurrencySelect", isProcedure: true);
+			Assert.AreEqual("AFA", value);
+		}
 
 		[TearDown]
 		public void CleanUp()
