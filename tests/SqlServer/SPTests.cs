@@ -83,14 +83,12 @@ namespace Massive.Tests.Oracle
 			Assert.AreEqual(typeof(string), person.FirstName.GetType());
 		}
 
-		// TO DO: This should be done as Scalar()
 		[Test]
 		public void DateReturnParameter()
 		{
 			var db = new SPTestsDatabase();
-			// Scalar valued function (returns System.DateTime type)
 			dynamic d = new ExpandoObject();
-			d.d = true; // NB this is ignored (by the underlying driver)
+			d.d = true; // NB the type is ignored (by the underlying driver)
 			var dResult = db.ExecuteAsProcedure("ufnGetAccountingEndDate", returnParams: d);
 			Assert.AreEqual(typeof(DateTime), dResult.d.GetType());
 		}

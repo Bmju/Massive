@@ -176,7 +176,6 @@ namespace Massive
 			{
 				if(direction != ParameterDirection.Input)
 				{
-					// TO DO: may be able to use this in other directions on some DBs?
 					throw new InvalidOperationException("object[] arguments supported for input parameters only");
 				}
 				// anonymous parameters from array
@@ -746,7 +745,9 @@ namespace Massive
 				// manage wrapping transaction if required, and if we have not been passed an incoming connection
 				using(var trans = ((connection == null && Transaction.Current == null && command.RequiresWrappingTransaction(this)) ? localConn.BeginTransaction() : null))
 				{
-					// TO DO: Apply single result hint when appropriate (once Npgsql is dereferencing for us)
+					// TO DO: Apply single result hint when appropriate
+					// (since all the cursors we might dereference come in the first result set, we can do this even
+					// if we are dereferencing PostgreSQL cursors)
 					using(var rdr = command.ExecuteDereferencingReader(connection ?? localConn, this))
 					{
 						if(typeof(T) == typeof(IEnumerable<dynamic>))
@@ -798,6 +799,7 @@ namespace Massive
 		/// <returns>first value returned from the query executed or null of no result was returned by the database.</returns>
 		public virtual object ScalarWithParams(string sql, object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, bool isProcedure = false, DbConnection connection = null, params object[] args)
 		{
+			// NB This does (also) do Scalar
 			return ExecuteWithParams(sql, inParams, outParams, ioParams, returnParams, isProcedure, true, connection, null, args);
 		}
 

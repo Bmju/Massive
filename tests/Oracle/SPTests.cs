@@ -223,13 +223,6 @@ namespace Massive.Tests.Oracle
 			}
 		}
 
-		//[Test]
-		//public void ScalarFromProcedure()
-		//{
-		//	var db = new SPTestDatabase();
-		//	// TO DO
-		//}
-
 		[TearDown]
 		public void CleanUp()
 		{

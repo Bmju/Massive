@@ -72,7 +72,6 @@ namespace Massive
 
 			// Supports 1x1 1xN Nx1 and NXM patterns of cursor data.
 			// If just some values are cursors we follow the pre-existing pattern set by the Oracle drivers, and dereference what we can.
-			// TO DO: Confirm pattern on SQL Server drivers.
 			while(reader.Read())
 			{
 				for(int i = 0; i < reader.FieldCount; i++)
