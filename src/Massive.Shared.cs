@@ -49,7 +49,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="rdr">The reader.</param>
 		/// <returns>streaming enumerable with expandos, one for each row read</returns>
-		internal static IEnumerable<dynamic> YieldResult(this IDataReader rdr)
+		internal static IEnumerable<dynamic> YieldResult(this DbDataReader rdr)
 		{
 			while(rdr.Read())
 			{

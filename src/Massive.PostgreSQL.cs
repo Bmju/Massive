@@ -38,7 +38,7 @@ using System.Text;
 namespace Massive
 {
 	// Cursor dereferencing data reader, which may go back into Npgsql at some point
-	public class NpgsqlDereferencingReader : IDataReader
+	public class NpgsqlDereferencingReader : DbDataReader
 	{
 		private DbConnection Connection;
 		private DynamicModel Db;
@@ -156,49 +156,48 @@ namespace Massive
 			Count = 0;
 		}
 
-		#region IDataReader interface
-		public object this[string name] { get { return Reader[name]; } }
-		public object this[int i] { get { return Reader[i]; } }
-		public int Depth { get { return Reader.Depth; } }
-		public int FieldCount { get { return Reader.FieldCount; } }
-		public bool IsClosed { get { return Reader.IsClosed; } }
-		public int RecordsAffected { get { return Reader.RecordsAffected; } }
+		#region DbDataReader abstract interface
+		public override object this[string name] { get { return Reader[name]; } }
+		public override object this[int i] { get { return Reader[i]; } }
+		public override int Depth { get { return Reader.Depth; } }
+		public override int FieldCount { get { return Reader.FieldCount; } }
+		public override bool HasRows { get { return Reader.HasRows; } }
+		public override bool IsClosed { get { return Reader.IsClosed; } }
+		public override int RecordsAffected { get { return Reader.RecordsAffected; } }
 
-		public void Close()
+		public override void Close()
 		{
 			CloseCursor();
 		}
 
-		public void Dispose()
-		{
-			CloseCursor();
-		}
+		public override bool GetBoolean(int i) { return Reader.GetBoolean(i); }
+		public override byte GetByte(int i) { return Reader.GetByte(i); }
+		public override long GetBytes(int i, long fieldOffset, byte[] buffer, int bufferoffset, int length) { return Reader.GetBytes(i, fieldOffset, buffer, bufferoffset, length); }
+		public override char GetChar(int i) { return Reader.GetChar(i); }
+		public override long GetChars(int i, long fieldoffset, char[] buffer, int bufferoffset, int length) { return Reader.GetChars(i, fieldoffset, buffer, bufferoffset, length); }
+		//public IDataReader GetData(int i) { return Reader.GetData(i); }
+		public override string GetDataTypeName(int i) { return Reader.GetDataTypeName(i); }
+		public override DateTime GetDateTime(int i) { return Reader.GetDateTime(i); }
+		public override decimal GetDecimal(int i) { return Reader.GetDecimal(i); }
+		public override double GetDouble(int i) { return Reader.GetDouble(i); }
 
-		public bool GetBoolean(int i) { return Reader.GetBoolean(i); }
-		public byte GetByte(int i) { return Reader.GetByte(i); }
-		public long GetBytes(int i, long fieldOffset, byte[] buffer, int bufferoffset, int length) { return Reader.GetBytes(i, fieldOffset, buffer, bufferoffset, length); }
-		public char GetChar(int i) { return Reader.GetChar(i); }
-		public long GetChars(int i, long fieldoffset, char[] buffer, int bufferoffset, int length) { return Reader.GetChars(i, fieldoffset, buffer, bufferoffset, length); }
-		public IDataReader GetData(int i) { return Reader.GetData(i); }
-		public string GetDataTypeName(int i) { return Reader.GetDataTypeName(i); }
-		public DateTime GetDateTime(int i) { return Reader.GetDateTime(i); }
-		public decimal GetDecimal(int i) { return Reader.GetDecimal(i); }
-		public double GetDouble(int i) { return Reader.GetDouble(i); }
-		public Type GetFieldType(int i) { return Reader.GetFieldType(i); }
-		public float GetFloat(int i) { return Reader.GetFloat(i); }
-		public Guid GetGuid(int i) { return Reader.GetGuid(i); }
-		public short GetInt16(int i) { return Reader.GetInt16(i); }
-		public int GetInt32(int i) { return Reader.GetInt32(i); }
-		public long GetInt64(int i) { return Reader.GetInt64(i); }
-		public string GetName(int i) { return Reader.GetName(i); }
-		public int GetOrdinal(string name) { return Reader.GetOrdinal(name); }
-		public DataTable GetSchemaTable() { return Reader.GetSchemaTable(); }
-		public string GetString(int i) { return Reader.GetString(i); }
-		public object GetValue(int i) { return Reader.GetValue(i); }
-		public int GetValues(object[] values) { return Reader.GetValues(values); }
-		public bool IsDBNull(int i) { return Reader.IsDBNull(i); }
+		public override System.Collections.IEnumerator GetEnumerator() { throw new NotSupportedException(); }
 
-		public bool NextResult()
+		public override Type GetFieldType(int i) { return Reader.GetFieldType(i); }
+		public override float GetFloat(int i) { return Reader.GetFloat(i); }
+		public override Guid GetGuid(int i) { return Reader.GetGuid(i); }
+		public override short GetInt16(int i) { return Reader.GetInt16(i); }
+		public override int GetInt32(int i) { return Reader.GetInt32(i); }
+		public override long GetInt64(int i) { return Reader.GetInt64(i); }
+		public override string GetName(int i) { return Reader.GetName(i); }
+		public override int GetOrdinal(string name) { return Reader.GetOrdinal(name); }
+		public override DataTable GetSchemaTable() { return Reader.GetSchemaTable(); }
+		public override string GetString(int i) { return Reader.GetString(i); }
+		public override object GetValue(int i) { return Reader.GetValue(i); }
+		public override int GetValues(object[] values) { return Reader.GetValues(values); }
+		public override bool IsDBNull(int i) { return Reader.IsDBNull(i); }
+
+		public override bool NextResult()
 		{
 			var closeSql = CloseCursor(Index >= Cursors.Count);
 			if(Index >= Cursors.Count)
@@ -210,7 +209,7 @@ namespace Massive
 			return true;
 		}
 
-		public bool Read()
+		public override bool Read()
 		{
 			if(Reader != null)
 			{
@@ -245,7 +244,7 @@ namespace Massive
 		/// <param name="reader">The reader to check</param>
 		/// <returns>Are there cursors?</returns>
 		/// <remarks>Part of NpgsqlDereferencingReader</remarks>
-		private static bool CanDereference(this IDataReader reader)
+		private static bool CanDereference(this DbDataReader reader)
 		{
 			bool hasCursors = false;
 			for(int i = 0; i < reader.FieldCount; i++)
@@ -271,7 +270,7 @@ namespace Massive
 		/// https://github.com/npgsql/npgsql/issues/438
 		/// http://stackoverflow.com/questions/42292341/
 		/// </remarks>
-		internal static IDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection Connection, DynamicModel db)
+		internal static DbDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection Connection, DynamicModel db)
 		{
 			var reader = cmd.ExecuteReader(); // var reader = Execute(behavior);
 
