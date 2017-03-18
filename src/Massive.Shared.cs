@@ -270,11 +270,11 @@ namespace Massive
 
 
 		/// <summary>
-		/// Turns an IDataReader to a Dynamic list of things
+		/// Turns an DbDataReader to a Dynamic list of things
 		/// </summary>
 		/// <param name="reader">The datareader which rows to convert to a list of expandos.</param>
 		/// <returns>List of expandos, one for every row read.</returns>
-		public static List<dynamic> ToExpandoList(this IDataReader reader)
+		public static List<dynamic> ToExpandoList(this DbDataReader reader)
 		{
 			var result = new List<dynamic>();
 			while(reader.Read())
@@ -290,7 +290,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="reader">The RDR.</param>
 		/// <returns>expando object which contains the values of the row the reader points to</returns>
-		public static dynamic RecordToExpando(this IDataReader reader)
+		public static dynamic RecordToExpando(this DbDataReader reader)
 		{
 			dynamic e = new ExpandoObject();
 			var d = (IDictionary<string, object>)e;
