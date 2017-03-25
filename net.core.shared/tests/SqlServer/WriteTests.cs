@@ -15,7 +15,7 @@ namespace Massive.Tests
 	[TestFixture]
     public class WriteTests
     {
-		[TestFixtureSetUp]
+		[OneTimeSetUp]
 		public void Setup()
 		{
 			InterceptorCore.Initialize("Massive SqlServer write tests .NET 4.0");
@@ -142,7 +142,7 @@ namespace Massive.Tests
 		}
 
 
-		[TestFixtureTearDown]
+		[OneTimeTearDown]
 		public void CleanUp()
 		{
 			var db = new DynamicModel(TestConstants.WriteTestConnectionStringName);

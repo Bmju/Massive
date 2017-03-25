@@ -44,9 +44,15 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Massive.MySql.cs" />
-    <Compile Include="Massive.Shared.Async.cs" />
-    <Compile Include="Massive.Shared.cs" />
+    <Compile Include="..\..\net.core.shared\src\Massive.MySql.cs">
+		<Link>Massive.MySql.cs</Link>
+	</Compile>
+    <Compile Include="..\..\net.core.shared\src\Massive.Shared.Async.cs">
+		<Link>Massive.Shared.Async.cs</Link>
+	</Compile>
+    <Compile Include="..\..\net.core.shared\src\Massive.Shared.cs">
+		<Link>Massive.Shared.cs</Link>
+	</Compile>
     <Compile Include="Properties\MySqlAssemblyInfo.cs" />
     <Compile Include="Properties\SharedAssemblyInfo.cs" />
   </ItemGroup>

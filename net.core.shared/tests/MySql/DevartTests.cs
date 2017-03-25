@@ -26,7 +26,7 @@ namespace Massive.Tests.MySql
 			ProviderName = providerName;
 		}
 
-		[TestFixtureSetUp]
+		[OneTimeSetUp]
 		public void Setup()
 		{
 			// The SD Tools wrapper is hiding the Devart command ParameterCheck property which is used in this test

@@ -15,7 +15,7 @@ namespace Massive.Tests
 	[TestFixture]
     public class AsyncReadTests
     {
-		[TestFixtureSetUp]
+		[OneTimeSetUp]
 		public void Setup()
 		{
 			InterceptorCore.Initialize("Massive SqlServer async read tests .NET 4.0");

@@ -3,13 +3,13 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 [assembly: AssemblyTitle("Massive")]
-[assembly: AssemblyConfiguration(".NET 4.0+")]
+[assembly: AssemblyConfiguration(".NET 4.5+")]
 [assembly: AssemblyProduct("Massive")]
-[assembly: AssemblyCopyright("Copyright © 2009-2016 various contributors")]
+[assembly: AssemblyCopyright("Copyright © 2009-2017 various contributors")]
 [assembly: AssemblyCulture("")]
 [assembly: ComVisible(false)]
 
 // version
-[assembly: AssemblyVersion("2.0.0.0")]
+[assembly: AssemblyVersion("3.0.0.0")]
 // version + builddate (yy.mmdd)
-[assembly: AssemblyFileVersion("2.0.16.0127")]
+[assembly: AssemblyFileVersion("3.0.17.0317")]

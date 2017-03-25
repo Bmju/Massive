@@ -49,20 +49,25 @@
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="nunit.framework">
-      <HintPath>..\packages\NUnit.2.6.4\lib\nunit.framework.dll</HintPath>
+    <Reference Include="nunit.framework, Version=3.6.1.0, Culture=neutral, PublicKeyToken=2638cd05610744eb, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\NUnit.3.6.1\lib\net45\nunit.framework.dll</HintPath>
+      <Private>True</Private>
     </Reference>
-    <Reference Include="SD.Tools.Algorithmia">
-      <HintPath>..\packages\SD.Tools.Algorithmia.1.1.0\lib\SD.Tools.Algorithmia.dll</HintPath>
+    <Reference Include="SD.Tools.Algorithmia, Version=1.2.0.0, Culture=neutral, PublicKeyToken=8ede9265bbb8e107, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\SD.Tools.Algorithmia.1.2.1\lib\net35\SD.Tools.Algorithmia.dll</HintPath>
+      <Private>True</Private>
     </Reference>
-    <Reference Include="SD.Tools.BCLExtensions">
-      <HintPath>..\packages\SD.Tools.BCLExtensions.1.0.0\lib\SD.Tools.BCLExtensions.dll</HintPath>
+    <Reference Include="SD.Tools.BCLExtensions, Version=1.1.0.0, Culture=neutral, PublicKeyToken=a3f87088dcb994e1, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\SD.Tools.BCLExtensions.1.1.1\lib\net35\SD.Tools.BCLExtensions.dll</HintPath>
+      <Private>True</Private>
     </Reference>
-    <Reference Include="SD.Tools.OrmProfiler.Interceptor">
-      <HintPath>..\packages\SD.Tools.OrmProfiler.Interceptor.1.5.20150209\lib\net35\SD.Tools.OrmProfiler.Interceptor.dll</HintPath>
+    <Reference Include="SD.Tools.OrmProfiler.Interceptor, Version=1.5.0.0, Culture=neutral, PublicKeyToken=f175dc08f093a9ae, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\SD.Tools.OrmProfiler.Interceptor.1.5.20150715\lib\net35\SD.Tools.OrmProfiler.Interceptor.dll</HintPath>
+      <Private>True</Private>
     </Reference>
-    <Reference Include="SD.Tools.OrmProfiler.Shared">
-      <HintPath>..\packages\SD.Tools.OrmProfiler.Interceptor.1.5.20150209\lib\net35\SD.Tools.OrmProfiler.Shared.dll</HintPath>
+    <Reference Include="SD.Tools.OrmProfiler.Shared, Version=1.5.0.0, Culture=neutral, PublicKeyToken=f175dc08f093a9ae, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\SD.Tools.OrmProfiler.Interceptor.1.5.20150715\lib\net35\SD.Tools.OrmProfiler.Shared.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.configuration" />
@@ -75,28 +80,48 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\..\src\Massive.MySql.cs">
+    <Compile Include="..\..\..\net.core.shared\src\Massive.MySql.cs">
       <Link>Massive.MySql.cs</Link>
     </Compile>
-    <Compile Include="..\..\src\Massive.Shared.cs">
+    <Compile Include="..\..\..\net.core.shared\src\Massive.Shared.cs">
       <Link>Massive.Shared.cs</Link>
     </Compile>
-    <Compile Include="ReadTests.cs" />
-    <Compile Include="WriteTests.cs" />
-    <Compile Include="SPTests.cs" />
-    <Compile Include="DevartTests.cs" />
-    <Compile Include="ConstantsEnums.cs" />
+    <Compile Include="..\..\..\net.core.shared\Tests\MySql\ReadTests.cs">
+      <Link>ReadTests.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\net.core.shared\Tests\MySql\WriteTests.cs">
+      <Link>WriteTests.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\net.core.shared\Tests\MySql\SPTests.cs">
+      <Link>SPTests.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\net.core.shared\Tests\MySql\DevartTests.cs">
+      <Link>DevartTests.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\net.core.shared\Tests\MySql\ConstantsEnums.cs">
+      <Link>ConstantsEnums.cs</Link>
+    </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="TableClasses\Film.cs" />
-    <Compile Include="TableClasses\Category.cs" />
-    <Compile Include="TableClasses\Product.cs" />
-    <Compile Include="TableClasses\SPTestsDatabase.cs" />
+    <Compile Include="..\..\..\net.core.shared\Tests\MySql\TableClasses\Film.cs">
+      <Link>TableClasses\Film.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\net.core.shared\Tests\MySql\TableClasses\Category.cs">
+      <Link>TableClasses\Category.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\net.core.shared\Tests\MySql\TableClasses\Product.cs">
+      <Link>TableClasses\Product.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\net.core.shared\Tests\MySql\TableClasses\SPTestsDatabase.cs">
+      <Link>TableClasses\SPTestsDatabase.cs</Link>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
     <None Include="packages.config" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Service Include="{82A7F48D-3B50-4B1E-B82E-3ADA8210C358}" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

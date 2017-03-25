@@ -1,2 +1,2 @@
 ﻿using System.Reflection;
-[assembly: AssemblyDescription("Micro ORM to query and manage data in PostgreSql")]
+[assembly: AssemblyDescription("Micro ORM to query and manage data in PostgreSQL")]

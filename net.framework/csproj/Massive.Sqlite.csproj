@@ -45,11 +45,17 @@
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>
-    <Compile Include="Massive.Shared.Async.cs" />
-    <Compile Include="Massive.Shared.cs" />
-    <Compile Include="Massive.Sqlite.cs" />
+    <Compile Include="..\..\net.core.shared\src\Massive.Shared.Async.cs">
+		<Link>Massive.Shared.Async.cs</Link>
+	</Compile>
+    <Compile Include="..\..\net.core.shared\src\Massive.Shared.cs">
+		<Link>Massive.Shared.cs</Link>
+	</Compile>
+    <Compile Include="..\..\net.core.shared\src\Massive.Sqlite.cs">
+		<Link>Massive.Sqlite.cs</Link>
+	</Compile>
     <Compile Include="Properties\SharedAssemblyInfo.cs" />
-    <Compile Include="Properties\SQLiteAssemblyInfo.cs" />
+    <Compile Include="Properties\SqliteAssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

@@ -31,7 +31,7 @@ namespace Massive.Tests.Oracle
 			ProviderName = providerName;
 		}
 
-		[TestFixtureSetUp]
+		[OneTimeSetUp]
 		public void Setup()
 		{
 			InterceptorCore.Initialize("Massive Oracle read/write tests .NET 4.0");
@@ -188,7 +188,7 @@ namespace Massive.Tests.Oracle
 		}
 
 
-		[TestFixtureTearDown]
+		[OneTimeTearDown]
 		public void CleanUp()
 		{
 			// delete all rows with department name 'Massive Dep'. 

@@ -18,7 +18,7 @@ namespace Massive.Tests.PostgreSql
 	[TestFixture]
     public class ReadWriteTests
     {
-		[TestFixtureSetUp]
+		[OneTimeSetUp]
 		public void Setup()
 		{
 			InterceptorCore.Initialize("Massive Postgresql Read/Write tests");
@@ -123,7 +123,7 @@ namespace Massive.Tests.PostgreSql
 		}
 
 
-		[TestFixtureTearDown]
+		[OneTimeTearDown]
 		public void CleanUp()
 		{
 			// delete all rows with ProductName 'Massive Product'. 

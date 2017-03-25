@@ -27,7 +27,7 @@ namespace Massive.Tests.MySql
 			ProviderName = providerName;
 		}
 
-		[TestFixtureSetUp]
+		[OneTimeSetUp]
 		public void Setup()
 		{
 			InterceptorCore.Initialize("Massive MySql stored procedure tests .NET 4.0");

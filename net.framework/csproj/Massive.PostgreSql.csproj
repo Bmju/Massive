@@ -44,9 +44,15 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Massive.PostgreSql.cs" />
-    <Compile Include="Massive.Shared.Async.cs" />
-    <Compile Include="Massive.Shared.cs" />
+    <Compile Include="..\..\net.core.shared\src\Massive.Postgresql.cs">
+		<Link>Massive.Postgresql.cs</Link>
+	</Compile>
+    <Compile Include="..\..\net.core.shared\src\Massive.Shared.Async.cs">
+		<Link>Massive.Shared.Async.cs</Link>
+	</Compile>
+    <Compile Include="..\..\net.core.shared\src\Massive.Shared.cs">
+		<Link>Massive.Shared.cs</Link>
+	</Compile>
     <Compile Include="Properties\PostgreSqlAssemblyInfo.cs" />
     <Compile Include="Properties\SharedAssemblyInfo.cs" />
   </ItemGroup>

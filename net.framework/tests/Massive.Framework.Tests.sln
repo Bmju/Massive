@@ -3,15 +3,15 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2013
 VisualStudioVersion = 12.0.40629.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Massive.Tests.SqlServer", "tests\SqlServer\Massive.Tests.SqlServer.csproj", "{A7C1CA51-F35B-4B93-BFF1-55E04BA74FC5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Massive.Tests.SqlServer", "SqlServer\Massive.Tests.SqlServer.csproj", "{A7C1CA51-F35B-4B93-BFF1-55E04BA74FC5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Massive.Tests.Oracle", "tests\Oracle\Massive.Tests.Oracle.csproj", "{6497FB15-EA44-48E5-98B8-31C3D438F170}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Massive.Tests.Oracle", "Oracle\Massive.Tests.Oracle.csproj", "{6497FB15-EA44-48E5-98B8-31C3D438F170}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Massive.Tests.PostgreSql", "tests\PostgreSql\Massive.Tests.PostgreSql.csproj", "{79199955-28FE-4E58-AC0E-9891BF3ECF3C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Massive.Tests.PostgreSql", "PostgreSql\Massive.Tests.PostgreSql.csproj", "{79199955-28FE-4E58-AC0E-9891BF3ECF3C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Massive.Tests.Sqlite", "tests\Sqlite\Massive.Tests.Sqlite.csproj", "{74F16411-F3B5-4FCA-AB90-5BDB2E508606}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Massive.Tests.Sqlite", "Sqlite\Massive.Tests.Sqlite.csproj", "{74F16411-F3B5-4FCA-AB90-5BDB2E508606}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Massive.Tests.MySql", "tests\MySql\Massive.Tests.MySql.csproj", "{67ED2122-3504-4C3C-ADE1-A61F48C6AFB5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Massive.Tests.MySql", "MySql\Massive.Tests.MySql.csproj", "{67ED2122-3504-4C3C-ADE1-A61F48C6AFB5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
