@@ -8,7 +8,7 @@ namespace Massive.Tests.PostgreSql.TableClasses
 {
 	public class SPTestsDatabase : DynamicModel
 	{
-		public SPTestsDatabase() : base(TestConstants.ReadWriteTestConnectionStringName)
+		public SPTestsDatabase() : base(TestConstants.ReadWriteTestConnection)
 		{
 		}
 	}

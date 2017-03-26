@@ -1,11 +1,11 @@
 ﻿///////////////////////////////////////////////////////////////////////////////////////////////////
-// Massive v2.0. Main code.
+// Massive v3.0. Main code.
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Licensed to you under the New BSD License
 // http://www.opensource.org/licenses/bsd-license.php
-// Massive is copyright (c) 2009-2016 various contributors.
+// Massive is copyright (c) 2009-2017 various contributors.
 // All rights reserved.
-// See for sourcecode, full history and contributors list: https://github.com/FransBouma/Massive
+// See for sourcecode, full history and contributors list: https://github.com/MikeBeaton/Massive
 //
 // Redistribution and use in source and binary forms, with or without modification, are permitted 
 // provided that the following conditions are met:
@@ -29,49 +29,39 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
-using System.Configuration;
 using System.Data;
 using System.Data.Common;
 using System.Dynamic;
 using System.Linq;
 using System.Reflection;
+using System.Text;
+#if !COREFX
+using System.Configuration;
 using System.Transactions;
+#endif
 
 namespace Massive
 {
 	/// <summary>
-	/// Class which provides extension methods for various ADO.NET objects.
+	/// A class that wraps your database table in Dynamic Funtime
 	/// </summary>
-	public static partial class ObjectExtensions
+	/// <seealso cref="System.Dynamic.DynamicObject" />
+	public partial class DynamicModel : DynamicObject
 	{
-		/// <summary>
-		/// Yield return the next result set of this reader
-		/// </summary>
-		/// <param name="rdr">The reader.</param>
-		/// <returns>streaming enumerable with expandos, one for each row read</returns>
-		internal static IEnumerable<dynamic> YieldResult(this DbDataReader rdr)
-		{
-			while(rdr.Read())
-			{
-				yield return rdr.RecordToExpando();
-			}
-		}
-
-
 		/// <summary>
 		/// Extension for adding single parameter.
 		/// </summary>
 		/// <param name="cmd">The command to add the parameter to.</param>
 		/// <param name="value">The value to add as a parameter to the command.</param>
 		/// <remarks>
-		/// This method is needed for backwards compatibility. If it was removed completely then old code could be made to
-		/// compile and work just fine simply by renaming AddNamedParam() to AddParam(). But an overload of AddParam() with
-		/// exactly this old method signature would /still/ be required, for the case where someone is accessing a copy of
-		/// Massive compiled into a DLL, and hence the linker is still looking for exactly this old method signature.
+		/// AddParam(cmd, value) is no longer an extension method because it requires per-database info, which now comes from
+		/// a _plugin object, as required for multi-database support which is (quite nice and) required for .NET CORE support.
+		/// This change is NOT to do with stored procedure and named parameter support per se, which was working and passing all
+		/// tests fine with AddParam(cmd, value) still with exactly the same method signative as in Massive v2.0.
 		/// </remarks>
-		public static void AddParam(this DbCommand cmd, object value)
+		public void AddParam(DbCommand cmd, object value)
 		{
-			cmd.AddNamedParam(value);
+			AddNamedParam(cmd, value);
 		}
 
 		/// <summary>
@@ -82,33 +72,33 @@ namespace Massive
 		/// <param name="name">The parameter name, auto-generated if omitted.</param>
 		/// <param name="direction">The parameter direction, input if omitted.</param>
 		/// <param name="type">Type from which to infer sql parameter type when value is null. Optional, but required if value is null and direction is not input.</param>
-		public static void AddNamedParam(this DbCommand cmd, object value, string name = null, ParameterDirection direction = ParameterDirection.Input, Type type = null)
+		public void AddNamedParam(DbCommand cmd, object value, string name = null, ParameterDirection direction = ParameterDirection.Input, Type type = null)
 		{
 			var p = cmd.CreateParameter();
 			if(name == string.Empty)
 			{
-				if(!p.SetAnonymousParameter())
+				if(!_plugin.SetAnonymousParameter(p))
 				{
 					throw new InvalidOperationException("Current ADO.NET provider does not support anonymous parameters");
 				}
 			}
 			else
 			{
-				p.ParameterName = DynamicModel.PrefixParameterName(name ?? cmd.Parameters.Count.ToString(), cmd);
+				p.ParameterName = _plugin.PrefixParameterName(name ?? cmd.Parameters.Count.ToString(), cmd);
 			}
-			p.SetDirection(direction);
+			_plugin.SetDirection(p, direction);
 			if(value == null)
 			{
 				if(type != null)
 				{
-					p.SetValue(type.CreateInstance());
+					_plugin.SetValue(p, type.CreateInstance());
 					// explicitly lock type and size to the values which ADO.NET has just implicitly assigned
 					// (when only implictly assigned, setting Value to DBNull.Value later on causes these to reset, in at least the Npgsql and SQL Server providers)
 					p.DbType = p.DbType;
 					p.Size = p.Size;
 				}
 				// Some ADO.NET providers completely ignore the parameter DbType when deciding on the .NET type for return values, others do not
-				else if(direction != ParameterDirection.Input && !p.IgnoresOutputTypes())
+				else if(direction != ParameterDirection.Input && !_plugin.IgnoresOutputTypes(p))
 				{
 					throw new InvalidOperationException("Parameter \"" + p.ParameterName + "\" - on this ADO.NET provider all output, input-output and return parameters require non-null value or fully typed property, to allow correct SQL parameter type to be inferred");
 				}
@@ -121,7 +111,7 @@ namespace Massive
 				{
 					// Placeholder cursor ref; we only need the value if passing in a cursor by value
 					// doesn't work on Postgres.
-					if(!p.SetCursor(cursor.Value))
+					if(!_plugin.SetCursor(p, cursor.Value))
 					{
 						throw new InvalidOperationException("ADO.NET provider does not support cursors");
 					}
@@ -129,7 +119,7 @@ namespace Massive
 				else
 				{
 					// Note - the passed in parameter value can be a real cursor ref, this works - at least in Oracle
-					p.SetValue(value);
+					_plugin.SetValue(p, value);
 				}
 			}
 			cmd.Parameters.Add(p);
@@ -141,7 +131,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="cmd">The command to add the parameters to.</param>
 		/// <param name="args">The parameter values to convert to parameters.</param>
-		public static void AddParams(this DbCommand cmd, params object[] args)
+		public void AddParams(DbCommand cmd, params object[] args)
 		{
 			if(args == null)
 			{
@@ -164,7 +154,7 @@ namespace Massive
 		/// object[] is also accepted for nameValuePairs in this method; this produces unnamed parameters, in ADO.NET providers which supported this.
 		/// NOTE: note this is not the same as passing object[] to AddParams, which it produces automatically named parameters ("@0".."@n").
 		/// </remarks>
-		public static void AddNamedParams(this DbCommand cmd, object nameValuePairs, ParameterDirection direction = ParameterDirection.Input)
+		public void AddNamedParams(DbCommand cmd, object nameValuePairs, ParameterDirection direction = ParameterDirection.Input)
 		{
 			if(nameValuePairs == null)
 			{
@@ -181,7 +171,7 @@ namespace Massive
 				// anonymous parameters from array
 				foreach(var value in values)
 				{
-					cmd.AddNamedParam(value, string.Empty);
+					AddNamedParam(cmd, value, string.Empty);
 				}
 				return;
 			}
@@ -190,50 +180,49 @@ namespace Massive
 			{
 				foreach(var pair in (IDictionary<string, object>)nameValuePairs)
 				{
-					cmd.AddNamedParam(pair.Value, pair.Key, direction);
+					AddNamedParam(cmd, pair.Value, pair.Key, direction);
 				}
 				return;
 			}
 
+#if !COREFX
 			if(nameValuePairs.GetType() == typeof(NameValueCollection) || nameValuePairs.GetType().IsSubclassOf(typeof(NameValueCollection)))
 			{
 				var argsCollection = (NameValueCollection)nameValuePairs;
 				foreach(string name in argsCollection)
 				{
-					cmd.AddNamedParam(argsCollection[name], name);
+					AddNamedParam(cmd, argsCollection[name], name);
 				}
 				return;
 			}
+#endif
 
 			// names, values and types from properties of anonymous object or POCO
 			foreach(PropertyInfo property in nameValuePairs.GetType().GetProperties())
 			{
 				// Extra null in GetValue() required for .NET backwards compatibility
-				cmd.AddNamedParam(property.GetValue(nameValuePairs, null), property.Name, direction, property.PropertyType);
+				AddNamedParam(cmd, property.GetValue(nameValuePairs, null), property.Name, direction, property.PropertyType);
 			}
 		}
+	}
 
 
+	/// <summary>
+	/// Class which provides extension methods for various ADO.NET objects.
+	/// </summary>
+	public static partial class ObjectExtensions
+	{
 		/// <summary>
-		/// Send back command parameter return values of all non-input parameters in a dynamic object.
+		/// Yield return the next result set of this reader
 		/// </summary>
-		/// <param name="cmd">The command from which to read the parameter values.</param>
-		/// <returns></returns>
-		public static dynamic ResultsAsExpando(this DbCommand cmd)
+		/// <param name="rdr">The reader.</param>
+		/// <returns>streaming enumerable with expandos, one for each row read</returns>
+		internal static IEnumerable<dynamic> YieldResult(this DbDataReader rdr)
 		{
-			dynamic result = new ExpandoObject();
-			var resultDictionary = (IDictionary<string, object>)result;
-			for(int i = 0; i < cmd.Parameters.Count; i++)
+			while(rdr.Read())
 			{
-				var param = cmd.Parameters[i];
-				if(param.Direction != ParameterDirection.Input)
-				{
-					var name = DynamicModel.DeprefixParameterName(param.ParameterName, cmd);
-					var value = param.GetValue();
-					resultDictionary.Add(name, value == DBNull.Value ? null : value);
-				}
+				yield return rdr.RecordToExpando();
 			}
-			return result;
 		}
 
 
@@ -257,7 +246,7 @@ namespace Massive
 			{
 				return Activator.CreateInstance(underlying);
 			}
-			if(type.IsValueType)
+			if(type.GetTypeInfo().IsValueType)
 			{
 				return Activator.CreateInstance(type);
 			}
@@ -315,7 +304,7 @@ namespace Massive
 		{
 			// Both the property lines can be simpler in .NET 4.5
 			PropertyInfo pinfoEnumProperty = o.GetType().GetProperties().Where(property => property.Name == enumPropertyName).FirstOrDefault();
-			if (pinfoEnumProperty == null && throwException == false)
+			if(pinfoEnumProperty == null && throwException == false)
 			{
 				return;
 			}
@@ -350,12 +339,14 @@ namespace Massive
 			}
 			var result = new ExpandoObject();
 			var d = (IDictionary<string, object>)result; //work with the Expando as a Dictionary
+#if !COREFX
 			if(o.GetType() == typeof(NameValueCollection) || o.GetType().IsSubclassOf(typeof(NameValueCollection)))
 			{
 				var nv = (NameValueCollection)o;
 				nv.Cast<string>().Select(key => new KeyValuePair<string, object>(key, nv[key])).ToList().ForEach(i => d.Add(i));
 			}
 			else
+#endif
 			{
 				var props = o.GetType().GetProperties();
 				foreach(var item in props)
@@ -378,6 +369,7 @@ namespace Massive
 		}
 
 
+#if !COREFX
 		/// <summary>
 		/// Extension method to convert dynamic data to a DataTable. Useful for databinding.
 		/// </summary>
@@ -426,6 +418,7 @@ namespace Massive
 			}
 			return toFill;
 		}
+#endif
 	}
 
 
@@ -464,12 +457,7 @@ namespace Massive
 		{
 			get
 			{
-				throw new NotSupportedException("DB.Current is now deprecated in Massive, since it is not reliable to assume that Machine.config has precisely one other connection string, use `db = new DynamicModel(connectionStringName)` instead; but look for this exception message in Massive.Shared.cs if you need to re-enable this code");
-				//if(ConfigurationManager.ConnectionStrings.Count > 1)
-				//{
-				//	return new DynamicModel(ConfigurationManager.ConnectionStrings[1].Name);
-				//}
-				//throw new InvalidOperationException("Need a connection string name - can't determine what it is");
+				return DynamicModel.Open();
 			}
 		}
 	}
@@ -481,59 +469,155 @@ namespace Massive
 	/// <seealso cref="System.Dynamic.DynamicObject" />
 	public partial class DynamicModel : DynamicObject
 	{
-		#region Members
+#region Members
+		internal IDatabasePlugin _plugin;
 		private DbProviderFactory _factory;
 		private string _connectionString;
 		private IEnumerable<dynamic> _schema;
 		private string _primaryKeyFieldSequence;
-		#endregion
+#endregion
 
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="DynamicModel" /> class.
 		/// </summary>
-		/// <param name="connectionStringName">Name of the connection string to load from the config file.</param>
+		/// <param name="connectionStringOrName">The connection string to use (or in .NET Framework but not Core the name of the connection string entry to load from config file).
+		/// When passing the connection string itself, Massive supports the non-standard syntax of including ProviderName=... in the connection string.</param>
 		/// <param name="tableName">Name of the table to read the meta data for. Can be left empty, in which case the name of this type is used.</param>
 		/// <param name="primaryKeyField">The primary key field. Can be left empty, in which case 'ID' is used.</param>
 		/// <param name="descriptorField">The descriptor field, if the table is a lookup table. Descriptor field is the field containing the textual representation of the value
 		/// in primaryKeyField.</param>
 		/// <param name="primaryKeyFieldSequence">The primary key sequence to use. Specify the empty string if the PK isn't sequenced/identity. Is initialized by default with
 		/// the name specified in the constant DynamicModel.DefaultSequenceName.</param>
-		/// <param name="connectionStringProvider">The connection string provider to use. By default this is empty and the default provider is used which will read values from 
-		/// the application's config file.</param>
-		public DynamicModel(string connectionStringName, string tableName = "", string primaryKeyField = "", string descriptorField = "",
-							string primaryKeyFieldSequence = DynamicModel._defaultSequenceName,
-							IConnectionStringProvider connectionStringProvider = null)
+		public DynamicModel(string connectionStringOrName = "", string tableName = "", string primaryKeyField = "", string descriptorField = "",
+							string primaryKeyFieldSequence = "")
 		{
+			DynamicModelConnectionProvider connectionProvider;
+#if !COREFX
+			connectionProvider = new ConfigFileConnectionProvider(connectionStringOrName);
+			if (((dynamic)connectionProvider).GetConnectionStringSettings() == null)
+#endif
+			{
+				// use pure connection string provider
+				connectionProvider = new PureConnectionStringProvider(connectionStringOrName
+#if !COREFX
+					, true
+#endif
+				);
+			}
+
+			_connectionString = connectionProvider.GetConnectionString();
+			_factory = connectionProvider.GetProviderFactory();
+			// we don't infer the provider name from the factory class type in case the factory is wrapped by other tools
+			var providerName = connectionProvider.GetProviderName();
+			_plugin = GetPlugin(providerName);
+
 			this.TableName = string.IsNullOrWhiteSpace(tableName) ? this.GetType().Name : tableName;
 			ProcessTableName();
 			this.PrimaryKeyField = string.IsNullOrWhiteSpace(primaryKeyField) ? "ID" : primaryKeyField;
-			_primaryKeyFieldSequence = primaryKeyFieldSequence == "" ? ConfigurationManager.AppSettings["default_seq"] : primaryKeyFieldSequence;
+			//ConfigurationManager.AppSettings["default_seq"] - REMOVED
+			_primaryKeyFieldSequence = primaryKeyFieldSequence == "" ? _plugin._defaultSequenceName : primaryKeyFieldSequence;
 			this.DescriptorField = descriptorField;
 			this.Errors = new List<string>();
+		}
 
-			if(connectionStringProvider == null)
+
+		/// <summary>
+		/// Get correct plugin for supported database based on the provider name.
+		/// </summary>
+		/// <param name="providerName">Provider name.</param>
+		/// <returns></returns>
+		private IDatabasePlugin GetPlugin(string providerName)
+		{
+			string database = GetMassiveDatabaseNameFromProviderName(providerName);
+			var pluginClassName = "Massive.Plugin." + database;
+			var type = Type.GetType(pluginClassName);
+			if (type == null)
 			{
-				connectionStringProvider = new ConfigurationBasedConnectionStringProvider();
+				throw new NotImplementedException("Cannot find type " + pluginClassName);
 			}
-			var _providerName = connectionStringProvider.GetProviderName(connectionStringName);
-			if(string.IsNullOrWhiteSpace(_providerName))
+			var plugin = (IDatabasePlugin)Activator.CreateInstance(type, false);
+			plugin._dynamicModel = this;
+			return plugin;
+		}
+
+
+		/// <summary>
+		/// Get Massive internal database name based on known provider name.
+		/// </summary>
+		/// <param name="providerName">Provider name.</param>
+		/// <returns></returns>
+		/// TO DO: Combine these two, and return a little MassiveDatabaseInfo object from ProviderName
+		private static string GetMassiveDatabaseNameFromProviderName(string providerName)
+		{
+			switch(providerName.ToLowerInvariant())
 			{
-				//_providerName = "System.Data.SqlClient";
-				//_providerName = "Oracle.ManagedDataAccess.Client";
-				//_providerName = "Oracle.DataAccess.Client";
-				//_providerName = "Npgsql";
-				//_providerName = "System.Data.SQLite";
-				//_providerName = "MySql.Data.MySqlClient";
-				//_providerName = "Devart.Data.MySql";
-				throw new NotSupportedException("Hard-coded provider name support is deprecated in Massive:" +
-												" if you are using a config file then add an additional ProviderName=\"...\" attribute" +
-												" next to your ConnectionString=\"...\" attribute (or for other configuration options update your own IConnectionStringProvider implementation);" +
-												" to restore this feature for backwards compatibility please edit Massive.Shared.cs" +
-												" (look for this exception message and you will find the required code)");
+				case "system.data.sqlclient":
+					return "SqlServer";
+
+				case "oracle.manageddataaccess.client":
+					return "Oracle";
+				case "oracle.dataaccess.client":
+					return "Oracle";
+
+				case "npgsql":
+					return "PostgreSql";
+
+				case "mysql.data.mysqlclient":
+					return "MySql";
+				case "devart.data.mysql":
+					return "MySql";
+
+				case "system.data.sqlite":
+				case "microsoft.data.sqlite":
+					return "Sqlite";
+
+				default:
+					throw new InvalidOperationException("Unknown database provider: " + providerName);
 			}
-			_factory = DbProviderFactories.GetFactory(_providerName);
-			_connectionString = connectionStringProvider.GetConnectionString(connectionStringName);
+		}
+
+
+		/// <summary>
+		/// Get factory class name based on known provider name.
+		/// </summary>
+		/// <param name="providerName">Provider name.</param>
+		/// <returns></returns>
+		internal static string GetDbProviderFactoryClassNameFromProviderName(string providerName, ref string assemblyName)
+		{
+			switch(providerName.ToLowerInvariant())
+			{
+				case "system.data.sqlclient":
+					return "System.Data.SqlClient.SqlClientFactory";
+
+				case "oracle.manageddataaccess.client":
+					return "Oracle.ManagedDataAccess.Client.OracleClientFactory";
+
+				case "oracle.dataaccess.client":
+					return "Oracle.DataAccess.Client.OracleClientFactory";
+
+				case "npgsql":
+					return "Npgsql.NpgsqlFactory";
+
+				case "mysql.data.mysqlclient":
+#if COREFX
+					//assemblyName = "MySql.Data.Core"; // older/beta version
+					assemblyName = "MySql.Data";
+#endif
+					return "MySql.Data.MySqlClient.MySqlClientFactory";
+
+				case "devart.data.mysql":
+					return "Devart.Data.MySql.MySqlProviderFactory";
+
+				case "system.data.sqlite":
+					return "System.Data.SQLite.SQLiteFactory";
+
+				case "microsoft.data.sqlite":
+					return "Microsoft.Data.Sqlite.SqliteFactory";
+
+				default:
+					throw new InvalidOperationException("Unknown database provider: " + providerName);
+			}
 		}
 
 
@@ -549,7 +633,7 @@ namespace Massive
 			{
 				return null;
 			}
-			return GetDefaultValue(column);
+			return _plugin.GetDefaultValue(column);
 		}
 
 
@@ -558,12 +642,13 @@ namespace Massive
 		/// </summary>
 		/// <param name="connectionStringName">Name of the connection string to load from the config file.</param>
 		/// <returns>ready to use, empty DynamicModel</returns>
-		public static DynamicModel Open(string connectionStringName)
+		public static DynamicModel Open(string connectionStringName = null)
 		{
 			return new DynamicModel(connectionStringName);
 		}
 
 
+#if !COREFX
 		/// <summary>
 		/// Creates a new Expando from a Form POST - white listed against the columns in the DB, only setting values which names are in the schema.
 		/// </summary>
@@ -583,6 +668,7 @@ namespace Massive
 			}
 			return result;
 		}
+#endif
 
 
 		/// <summary>
@@ -743,12 +829,16 @@ namespace Massive
 					command = CreateCommandWithParams(sql, inParams, outParams, ioParams, returnParams, isProcedure, connection ?? localConn, args);
 				}
 				// manage wrapping transaction if required, and if we have not been passed an incoming connection
-				using(var trans = ((connection == null && Transaction.Current == null && command.RequiresWrappingTransaction(this)) ? localConn.BeginTransaction() : null))
+				using(var trans = ((connection == null
+#if !COREFX
+					&& Transaction.Current == null
+#endif
+					&& _plugin.RequiresWrappingTransaction(command)) ? localConn.BeginTransaction() : null))
 				{
 					// TO DO: Apply single result hint when appropriate
 					// (since all the cursors we might dereference come in the first result set, we can do this even
 					// if we are dereferencing PostgreSQL cursors)
-					using(var rdr = command.ExecuteDereferencingReader(connection ?? localConn, this))
+					using(var rdr = _plugin.ExecuteDereferencingReader(command, connection ?? localConn))
 					{
 						if(typeof(T) == typeof(IEnumerable<dynamic>))
 						{
@@ -935,9 +1025,32 @@ namespace Massive
 				else
 				{
 					command.ExecuteNonQuery();
-					return command.ResultsAsExpando();
+					return ResultsAsExpando(command);
 				}
 			}
+		}
+
+
+		/// <summary>
+		/// Send back command parameter return values of all non-input parameters in a dynamic object.
+		/// </summary>
+		/// <param name="cmd">The command from which to read the parameter values.</param>
+		/// <returns></returns>
+		public dynamic ResultsAsExpando(DbCommand cmd)
+		{
+			dynamic result = new ExpandoObject();
+			var resultDictionary = (IDictionary<string, object>)result;
+			for(int i = 0; i < cmd.Parameters.Count; i++)
+			{
+				var param = cmd.Parameters[i];
+				if(param.Direction != ParameterDirection.Input)
+				{
+					var name = _plugin.DeprefixParameterName(param.ParameterName, cmd);
+					var value = _plugin.GetValue(param);
+					resultDictionary.Add(name, value == DBNull.Value ? null : value);
+				}
+			}
+			return result;
 		}
 
 
@@ -1360,7 +1473,7 @@ namespace Massive
 		/// </remarks>
 		public int CountWithParams(string tableName = "", string where = "", object inParams = null, object outParams = null, object ioParams = null, object returnParams = null, DbConnection connection = null, params object[] args)
 		{
-			var scalarQueryPattern = this.GetCountRowQueryPattern();
+			var scalarQueryPattern = _plugin.GetCountRowQueryPattern();
 			scalarQueryPattern += ReadifyWhereClause(where);
 			return Convert.ToInt32(ScalarWithParams(string.Format(scalarQueryPattern, string.IsNullOrEmpty(tableName) ? this.TableName : tableName), inParams, outParams, ioParams, returnParams, false, connection, args));
 		}
@@ -1422,7 +1535,7 @@ namespace Massive
 							break;
 						default:
 							// treat anything else as a name-value pair
-							wherePredicates.Add(string.Format("{0} = {1}", name, PrefixParameterName(name)));
+							wherePredicates.Add(string.Format("{0} = {1}", name, _plugin.PrefixParameterName(name)));
 							nameValueDictionary.Add(name, args[i]);
 							break;
 					}
@@ -1444,7 +1557,7 @@ namespace Massive
 				case "max":
 				case "min":
 				case "avg":
-					var aggregate = this.GetAggregateFunction(oplowercase);
+					var aggregate = _plugin.GetAggregateFunction(oplowercase);
 					if(!string.IsNullOrWhiteSpace(aggregate))
 					{
 						result = ScalarWithParams(string.Format("SELECT {0}({1}) FROM {2} {3}", aggregate, columns, this.TableName, whereClauseFragment), inParams: nameValueArgs, args: userArgs);
@@ -1476,14 +1589,14 @@ namespace Massive
 		{
 			var fieldNames = new List<string>();
 			var valueParameters = new List<string>();
-			var insertQueryPattern = this.GetInsertQueryPattern();
+			var insertQueryPattern = _plugin.GetInsertQueryPattern();
 			var result = CreateCommand(insertQueryPattern, null);
 			int counter = 0;
 			foreach(var item in (IDictionary<string, object>)expando)
 			{
 				fieldNames.Add(item.Key);
-				valueParameters.Add(PrefixParameterName(counter.ToString()));
-				result.AddParam(item.Value);
+				valueParameters.Add(_plugin.PrefixParameterName(counter.ToString()));
+				AddParam(result, item.Value);
 				counter++;
 			}
 			if(counter > 0)
@@ -1506,7 +1619,7 @@ namespace Massive
 		/// <returns>ready to use DbCommand</returns>
 		public virtual DbCommand CreateUpdateCommand(dynamic expando, object key)
 		{
-			return CreateUpdateWhereCommand(expando, string.Format("{0} = {1}", this.PrimaryKeyField, PrefixParameterName("0")), key);
+			return CreateUpdateWhereCommand(expando, string.Format("{0} = {1}", this.PrimaryKeyField, _plugin.PrefixParameterName("0")), key);
 		}
 
 
@@ -1523,7 +1636,7 @@ namespace Massive
 		public virtual DbCommand CreateUpdateWhereCommand(dynamic expando, string where = "", params object[] args)
 		{
 			var fieldSetFragments = new List<string>();
-			var updateQueryPattern = this.GetUpdateQueryPattern();
+			var updateQueryPattern = _plugin.GetUpdateQueryPattern();
 			updateQueryPattern += ReadifyWhereClause(where);
 			var result = CreateCommand(updateQueryPattern, null, args);
 			int counter = args.Length > 0 ? args.Length : 0;
@@ -1538,8 +1651,8 @@ namespace Massive
 					}
 					else
 					{
-						result.AddParam(val);
-						fieldSetFragments.Add(string.Format("{0} = {1}", item.Key, PrefixParameterName(counter.ToString())));
+						AddParam(result, val);
+						fieldSetFragments.Add(string.Format("{0} = {1}", item.Key, _plugin.PrefixParameterName(counter.ToString())));
 						counter++;
 					}
 				}
@@ -1565,14 +1678,14 @@ namespace Massive
 		/// <returns>ready to use DbCommand</returns>
 		public virtual DbCommand CreateDeleteCommand(string where = "", object key = null, params object[] args)
 		{
-			var sql = string.Format(this.GetDeleteQueryPattern(), TableName);
+			var sql = string.Format(_plugin.GetDeleteQueryPattern(), TableName);
 			if(key == null)
 			{
 				sql += ReadifyWhereClause(where);
 			}
 			else
 			{
-				sql += string.Format("WHERE {0}={1}", this.PrimaryKeyField, PrefixParameterName("0"));
+				sql += string.Format("WHERE {0}={1}", this.PrimaryKeyField, _plugin.PrefixParameterName("0"));
 				args = new[] { key };
 			}
 			return CreateCommand(sql, null, args);
@@ -1611,11 +1724,6 @@ namespace Massive
 		/// <param name="item">The item to save.</param>
 		/// <returns>true if save can proceed, false if it can't</returns>
 		public virtual bool BeforeSave(dynamic item) { return true; }
-		/// <summary>
-		/// Partial method which, when implemented offers ways to set DbCommand specific properties, which are specific for a given ADO.NET provider. 
-		/// </summary>
-		/// <param name="toAlter">the command object to alter the properties of</param>
-		partial void SetCommandSpecificProperties(DbCommand toAlter);
 
 
 		/// <summary>
@@ -1630,10 +1738,10 @@ namespace Massive
 			var result = _factory.CreateCommand();
 			if(result != null)
 			{
-				SetCommandSpecificProperties(result);
+				_plugin.SetCommandSpecificProperties(result);
 				result.Connection = conn;
 				result.CommandText = sql;
-				result.AddParams(args);
+				AddParams(result, args);
 			}
 			return result;
 		}
@@ -1656,11 +1764,11 @@ namespace Massive
 		{
 			DbCommand cmd = CreateCommand(sql, connection);
 			if(isProcedure) cmd.CommandType = CommandType.StoredProcedure;
-			cmd.AddParams(args);
-			cmd.AddNamedParams(inParams, ParameterDirection.Input);
-			cmd.AddNamedParams(outParams, ParameterDirection.Output);
-			cmd.AddNamedParams(ioParams, ParameterDirection.InputOutput);
-			cmd.AddNamedParams(returnParams, ParameterDirection.ReturnValue);
+			AddParams(cmd, args);
+			AddNamedParams(cmd, inParams, ParameterDirection.Input);
+			AddNamedParams(cmd, outParams, ParameterDirection.Output);
+			AddNamedParams(cmd, ioParams, ParameterDirection.InputOutput);
+			AddNamedParams(cmd, returnParams, ParameterDirection.ReturnValue);
 			return cmd;
 		}
 
@@ -1673,23 +1781,23 @@ namespace Massive
 		/// <param name="toInsert">The dynamic to insert. Is used to create the sql queries</param>
 		private void PerformInsert(DbConnection connection, DbTransaction transactionToUse, dynamic toInsert)
 		{
-			if(_sequenceValueCallsBeforeMainInsert && !string.IsNullOrEmpty(_primaryKeyFieldSequence))
+			if(_plugin._sequenceValueCallsBeforeMainInsert && !string.IsNullOrEmpty(_primaryKeyFieldSequence))
 			{
-				var sequenceCmd = CreateCommand(this.GetIdentityRetrievalScalarStatement(), connection);
+				var sequenceCmd = CreateCommand(_plugin.GetIdentityRetrievalScalarStatement(_primaryKeyFieldSequence), connection);
 				sequenceCmd.Transaction = transactionToUse;
 				((IDictionary<string, object>)toInsert)[this.PrimaryKeyField] = Convert.ToInt32(sequenceCmd.ExecuteScalar());
 			}
 			DbCommand cmd = CreateInsertCommand(toInsert);
 			cmd.Connection = connection;
 			cmd.Transaction = transactionToUse;
-			if(_sequenceValueCallsBeforeMainInsert || string.IsNullOrEmpty(_primaryKeyFieldSequence))
+			if(_plugin._sequenceValueCallsBeforeMainInsert || string.IsNullOrEmpty(_primaryKeyFieldSequence))
 			{
 				cmd.ExecuteNonQuery();
 			}
 			else
 			{
 				// simply batch the identity scalar query to the main insert query and execute them as one scalar query. This will both execute the statement and return the sequence value
-				cmd.CommandText += ";" + this.GetIdentityRetrievalScalarStatement();
+				cmd.CommandText += ";" + _plugin.GetIdentityRetrievalScalarStatement(_primaryKeyFieldSequence);
 				((IDictionary<string, object>)toInsert)[this.PrimaryKeyField] = Convert.ToInt32(cmd.ExecuteScalar());
 			}
 		}
@@ -1759,7 +1867,7 @@ namespace Massive
 		/// <returns></returns>
 		private bool ColumnExists(string columnName)
 		{
-			return this.Schema.Any(c => string.Compare(this.GetColumnName(c), columnName, StringComparison.InvariantCultureIgnoreCase) == 0);
+			return this.Schema.Any(c => string.Compare(_plugin.GetColumnName(c), columnName, StringComparison.OrdinalIgnoreCase) == 0);
 		}
 
 
@@ -1778,7 +1886,7 @@ namespace Massive
 		private dynamic BuildPagedResult(string sql = "", string primaryKeyField = "", string whereClause = "", string orderByClause = "", string columns = "*", int pageSize = 20,
 										 int currentPage = 1, params object[] args)
 		{
-			var queryPair = this.BuildPagingQueryPair(sql, primaryKeyField, whereClause, orderByClause, columns, pageSize, currentPage);
+			var queryPair = _plugin.BuildPagingQueryPair(sql, primaryKeyField, whereClause, orderByClause, columns, pageSize, currentPage);
 			dynamic result = new ExpandoObject();
 			result.TotalRecords = Scalar(queryPair.CountQuery, args);
 			result.TotalPages = result.TotalRecords / pageSize;
@@ -1800,7 +1908,7 @@ namespace Massive
 		/// <returns>Select statement pattern with {0} and {1} ready to be filled with projection list and source.</returns>
 		private string BuildSelectQueryPattern(string whereClause, string orderByClause, int limit)
 		{
-			return this.GetSelectQueryPattern(limit, ReadifyWhereClause(whereClause), ReadifyOrderByClause(orderByClause));
+			return _plugin.GetSelectQueryPattern(limit, ReadifyWhereClause(whereClause), ReadifyOrderByClause(orderByClause));
 		}
 
 
@@ -1810,7 +1918,7 @@ namespace Massive
 		/// <returns>ready to use predicate which assumes parameter to use for value is the first parameter</returns>
 		private string GetPkComparisonPredicateQueryFragment()
 		{
-			return string.Format("{0} = {1}", this.PrimaryKeyField, PrefixParameterName("0"));
+			return string.Format("{0} = {1}", this.PrimaryKeyField, _plugin.PrefixParameterName("0"));
 		}
 
 
@@ -1822,7 +1930,7 @@ namespace Massive
 		/// <returns></returns>
 		private dynamic GetColumn(string columnName)
 		{
-			return this.Schema.FirstOrDefault(c => string.Compare(this.GetColumnName(c), columnName, StringComparison.InvariantCultureIgnoreCase) == 0);
+			return this.Schema.FirstOrDefault(c => string.Compare(_plugin.GetColumnName(c), columnName, StringComparison.OrdinalIgnoreCase) == 0);
 		}
 
 
@@ -1831,7 +1939,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="rawWhereClause">The raw where clause.</param>
 		/// <returns>processed rawWhereClause which will guaranteed contain " WHERE" including prefix space.</returns>
-		private string ReadifyWhereClause(string rawWhereClause)
+		internal string ReadifyWhereClause(string rawWhereClause)
 		{
 			return ReadifyClause(rawWhereClause, "WHERE");
 		}
@@ -1844,7 +1952,7 @@ namespace Massive
 		/// <returns>
 		/// processed rawOrderByClause which will guaranteed contain " ORDER BY" including prefix space.
 		/// </returns>
-		private string ReadifyOrderByClause(string rawOrderByClause)
+		internal string ReadifyOrderByClause(string rawOrderByClause)
 		{
 			return ReadifyClause(rawOrderByClause, "ORDER BY");
 		}
@@ -1904,7 +2012,7 @@ namespace Massive
 			}
 		}
 
-		#region Obsolete methods. Do not use
+#region Obsolete methods. Do not use
 		/// <summary>
 		/// Builds a set of Insert and Update commands based on the passed-on objects. These objects can be POCOs, Anonymous, NameValueCollections, or Expandos. Objects
 		/// With a PK property (whatever PrimaryKeyField is set to) will be created at UPDATEs
@@ -1919,10 +2027,10 @@ namespace Massive
 			}
 			return commands;
 		}
-		#endregion
+#endregion
 
 
-		#region Properties
+#region Properties
 		/// <summary>
 		/// List out all the schema bits for use with ... whatever
 		/// </summary>
@@ -1932,8 +2040,8 @@ namespace Massive
 			{
 				if(_schema == null)
 				{
-					_schema = PostProcessSchemaQuery(string.IsNullOrWhiteSpace(this.SchemaName) ? Query(this.TableWithoutSchemaQuery, this.TableName)
-																		: Query(this.TableWithSchemaQuery, this.TableNameWithoutSchema, this.SchemaName));
+					_schema = _plugin.PostProcessSchemaQuery(string.IsNullOrWhiteSpace(this.SchemaName) ? Query(_plugin.TableWithoutSchemaQuery, this.TableName)
+																		: Query(_plugin.TableWithSchemaQuery, this.TableNameWithoutSchema, this.SchemaName));
 				}
 				return _schema;
 			}
@@ -1952,7 +2060,7 @@ namespace Massive
 				var schema = this.Schema;
 				foreach(dynamic column in schema)
 				{
-					var columnName = this.GetColumnName(column);
+					var columnName = _plugin.GetColumnName(column);
 					dc.Add(columnName, this.DefaultValue(columnName));
 				}
 				result._Table = this;
@@ -1997,71 +2105,470 @@ namespace Massive
 			get { return _connectionString; }
 			set { _connectionString = value; }
 		}
-		#endregion
+		/// <summary>
+		/// Whether to dereference cursors (Npgsql for PostgreSQL only).
+		/// </summary>
+		public bool NpgsqlAutoDereferenceCursors { get; set; } = true;
+		/// <summary>
+		/// The number of rows to fetch at once when dereferencing cursors (Npgsql for PostgreSQL only).
+		/// Set to zero or negative for FETCH ALL, but use with care this will cause huge PostgreSQL server-side buffering on large cursors.
+		/// </summary>
+		/// <remarks>
+		/// This is large enough to get the data back reasonably quickly for most users, but might be too large for an application
+		/// which requires multiple large cursors open at once.
+		/// </remarks>
+		public int NpgsqlAutoDereferenceFetchSize { get; set; } = 10000;
+#endregion
 	}
 
 
 	/// <summary>
-	/// Interface for specifying ado.net provider name and connection string. Used to create custom connection string/ado.net factory name providers 
-	/// for sources other than .config files, e.g. with usage in ASPNET5
+	/// Abstract class interface for specifying ADO.NET provider factory and connection string.
 	/// </summary>
-	public interface IConnectionStringProvider
+	/// <remarks>
+	/// TO DO: Okay, this needs to return:
+	///  - DbProviderFactory - always, MUST be returned for an unknown provider - and is not the same for the same database
+	///  - ConnectionString - always, obviously
+	///  - Massive.SupportedDatabase.Oracle, .SqlServer, .MySql, .Sqlite, .Postgresql - this is better than the provider name, because it
+	///	   doesn't tie us to known ADO.NET providers - however... if this is an abstract class, then we can define a version which infers
+	///	   the supported database from the provider factory!
+	///	   "In many cases, you will not need to override this method. The default implementation will work correctly for all the DbProviderFactory
+	///	   classes which Massive already knows about. You will need to override this if you are using a new ADO.NET provider (but only for a database which
+	///	   Massive does support, obviously!), or if something like a dependency injector or a profiler is wrapping the provider factory in another class."
+	///	 - Make the converter function be an (overridable!) method of this abstract class, as well :-)
+	/// </remarks>
+	internal abstract class DynamicModelConnectionProvider
 	{
+		/// <summary>
+		/// Return the actual factory object for the provider
+		/// </summary>
+		/// <returns></returns>
+		abstract internal DbProviderFactory GetProviderFactory();
+
+		/// <summary>
+		/// Gets the name of the provider.
+		/// </summary>
+		/// <param name="connectionStringName">Name of the connection string.</param>
+		/// <returns></returns>
+		/// <remarks>
+		/// Although Massive can in theory infer this name by reflection from the class of the provider factory, that
+		/// breaks if the provider factory is wrapped for other reasons - e.g. by a profiling tool.
+		/// </remarks>
+		abstract internal string GetProviderName();
+
+		/// <summary>
+		/// Gets the connection string stored under the name specified, or default connection string if no name sent
+		/// </summary>
+		/// <param name="connectionStringName">Name of the connection string.</param>
+		/// <returns></returns>
+		abstract internal string GetConnectionString();
+	}
+
+
+	/// <summary>
+	/// Default implementation of DynamicModelConnectionProvider which sorts out everything from a connection string with added property ProviderName=... .
+	/// </summary>
+	/// <seealso cref="Massive.DynamicModelConnectionProvider" />
+	internal class PureConnectionStringProvider : DynamicModelConnectionProvider
+	{
+		private readonly string InstanceFieldName = "Instance";
+
+		private string _providerName;
+		private string _connectionString;
+
+		public PureConnectionStringProvider(string ConnectionString, bool isFailoverFromConfigFile = false)
+		{
+			var extraMessage = isFailoverFromConfigFile ? " (and is not a valid connection string name)" : "";
+			try
+			{
+				StringBuilder connectionString = new StringBuilder();
+				foreach(var configPair in ConnectionString.Split(';'))
+				{
+					if(!string.IsNullOrEmpty(configPair))
+					{
+						var keyValuePair = configPair.Split('=');
+						if("providername".Equals(keyValuePair[0], StringComparison.OrdinalIgnoreCase))
+						{
+							_providerName = keyValuePair[1];
+						}
+						else
+						{
+							connectionString.Append(configPair);
+							connectionString.Append(";");
+						}
+					}
+				}
+				if(_providerName == null)
+				{
+					throw new InvalidOperationException("Cannot find ProviderName=... in connection string passed in to DynamicModel" + extraMessage);
+				}
+				_connectionString = connectionString.ToString();
+			}
+			catch
+			{
+				throw new InvalidOperationException("Cannot parse as connection string \"" + ConnectionString + "\"" + extraMessage);
+			}
+		}
+
+		/// <summary>
+		/// Return the actual factory object for the provider
+		/// </summary>
+		/// <returns></returns>
+		override internal DbProviderFactory GetProviderFactory()
+		{
+			string assemblyName = null;
+			// TO DO: Possibly we can just use .GetType(factoryClassName + ", " + assemblyName) here..., in which case that's what we should be returning just below.
+			var factoryClassName = DynamicModel.GetDbProviderFactoryClassNameFromProviderName(_providerName, ref assemblyName);
+			assemblyName = assemblyName ?? factoryClassName.Substring(0, factoryClassName.LastIndexOf("."));
+			var assemblyNameClass = new AssemblyName(assemblyName);
+			Type type = Assembly.Load(assemblyNameClass).GetType(factoryClassName);
+			// TO DO: Just use .GetField("Instance")!
+			try
+			{
+				foreach(var f in type.GetFields())
+				{
+					if(f.Name == InstanceFieldName)
+					{
+						return (DbProviderFactory)f.GetValue(null);
+					}
+				}
+			}
+			catch { }
+			throw new NotImplementedException("No " + InstanceFieldName + " field/property found in intended DbProviderFactory class '" + factoryClassName + "'");
+		}
+
 		/// <summary>
 		/// Gets the name of the provider which is the name of the DbProviderFactory specified in the connection string stored under the name specified.
 		/// </summary>
 		/// <param name="connectionStringName">Name of the connection string.</param>
 		/// <returns></returns>
-		string GetProviderName(string connectionStringName);
+		override internal string GetProviderName()
+		{
+			return _providerName;
+		}
+
 		/// <summary>
 		/// Gets the connection string stored under the name specified
 		/// </summary>
 		/// <param name="connectionStringName">Name of the connection string.</param>
 		/// <returns></returns>
-		string GetConnectionString(string connectionStringName);
+		override internal string GetConnectionString()
+		{
+			return _connectionString;
+		}
 	}
 
-
+#if !COREFX
 	/// <summary>
 	/// Default implementation of IConnectionStringProvider which uses config files for its source.
 	/// </summary>
 	/// <seealso cref="Massive.IConnectionStringProvider" />
-	public class ConfigurationBasedConnectionStringProvider : IConnectionStringProvider
+	internal class ConfigFileConnectionProvider : DynamicModelConnectionProvider
 	{
+		private string _connectionStringName;
+		private ConnectionStringSettings _connectionStringSettings;
+		private bool _calledOnce;
+
+		/// <summary>
+		/// Constructor
+		/// </summary>
+		/// <param name="ConnectionStringName">Connection string name; may be null to load by default the first connection string in the user config file.</param>
+		internal ConfigFileConnectionProvider(string ConnectionStringName = null)
+		{
+			_connectionStringName = ConnectionStringName;
+		}
+
 		/// <summary>
 		/// Return ConnectionStringSettings from name, exception if missing
 		/// </summary>
 		/// <param name="connectionStringName">Name of the connection string.</param>
 		/// <returns></returns>
-		private ConnectionStringSettings GetConnectionStringSettings(string connectionStringName)
+		internal ConnectionStringSettings GetConnectionStringSettings()
 		{
-			var result = ConfigurationManager.ConnectionStrings[connectionStringName];
-			if (result == null)
+			if (!_calledOnce)
 			{
-				throw new InvalidOperationException("Missing connection string \""+ connectionStringName + "\"");
+				if(_connectionStringName == null)
+				{
+					var machineConfigCount = System.Configuration.ConfigurationManager.OpenMachineConfiguration().ConnectionStrings.ConnectionStrings.Count;
+					if (ConfigurationManager.ConnectionStrings.Count <= machineConfigCount)
+					{
+						throw new InvalidOperationException("No user-configured connection string available");
+					}
+					_connectionStringSettings = ConfigurationManager.ConnectionStrings[machineConfigCount];
+				}
+				else
+				{
+					// may be null, if there is no such connection string name; Massive will switch to using the pure connection string provider.
+					_connectionStringSettings = ConfigurationManager.ConnectionStrings[_connectionStringName];
+				}
+				_calledOnce = true;
 			}
-			return result;
+			return _connectionStringSettings;
 		}
 
 		/// <summary>
-		/// Gets the name of the provider which is the name of the DbProviderFactory specified in the connection string stored under the name specified.
+		/// Return the actual factory object for the provider, based on the additional ProviderName=... attribute
+		/// which can be specified in addition to the ConnectionString="" attribute.
 		/// </summary>
-		/// <param name="connectionStringName">Name of the connection string.</param>
 		/// <returns></returns>
-		public string GetProviderName(string connectionStringName)
+		override internal DbProviderFactory GetProviderFactory()
 		{
-			var providerName = GetConnectionStringSettings(connectionStringName).ProviderName;
+			var providerName = GetProviderName();
+			return providerName == null ? null : DbProviderFactories.GetFactory(providerName);
+		}
+
+		/// <summary>
+		/// Gets the provider name which is stored in the config file along with the connection string
+		/// </summary>
+		/// <returns></returns>
+		override internal string GetProviderName()
+		{
+			var providerName = GetConnectionStringSettings().ProviderName;
 			return !string.IsNullOrWhiteSpace(providerName) ? providerName : null;
 		}
 
 		/// <summary>
-		/// Gets the connection string stored under the name specified
+		/// Gets the connection string
 		/// </summary>
-		/// <param name="connectionStringName">Name of the connection string.</param>
 		/// <returns></returns>
-		public string GetConnectionString(string connectionStringName)
+		override internal string GetConnectionString()
 		{
-			return GetConnectionStringSettings(connectionStringName).ConnectionString;
+			return GetConnectionStringSettings().ConnectionString;
 		}
+	}
+#endif
+
+
+	/// <summary>
+	/// A plugin to support one specific database
+	/// </summary>
+	internal abstract class IDatabasePlugin
+	{
+		/// <summary>
+		/// Return data reader, first dereferencing cursors if needed on this provider.
+		/// </summary>
+		/// <param name="cmd">The command.</param>
+		/// <param name="conn">The connection.</param>
+		/// <param name="db">The parent DynamicModel (or subclass).</param>
+		/// <returns>The reader.</returns>
+		abstract internal DbDataReader ExecuteDereferencingReader(DbCommand cmd, DbConnection conn);
+
+
+		/// <summary>
+		/// Returns true if this command requires a wrapping transaction.
+		/// </summary>
+		/// <param name="cmd">The command.</param>
+		/// <param name="db">The dynamic model, to access config params.</param>
+		/// <returns>true if it requires a wrapping transaction</returns>
+		abstract internal bool RequiresWrappingTransaction(DbCommand cmd);
+
+
+		/// <summary>
+		/// Set the parameter to the DB specific cursor type.
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <param name="value">Object reference to an existing cursor from a previous output or return direction cursor parameter, or null.</param>
+		/// <returns>Returns false if not supported on this provider.</returns>
+		abstract internal bool SetCursor(DbParameter p, object value);
+
+
+		/// <summary>
+		/// Check whether the parameter is of the DB specific cursor type.
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <returns>true if this is a cursor parameter.</returns>
+		abstract internal bool IsCursor(DbParameter p);
+
+
+		/// <summary>
+		/// Set anonymous DbParameter
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <returns>Returns false if not supported on this provider.</returns>
+		abstract internal bool SetAnonymousParameter(DbParameter p);
+
+
+		/// <summary>
+		/// Check whether ADO.NET provider ignores output parameter types (no point requiring user to provide them if it does)
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <returns>True if output parameter type is ignored when generating output data types.</returns>
+		abstract internal bool IgnoresOutputTypes(DbParameter p);
+
+
+		/// <summary>
+		/// Set ParameterDirection for single parameter, correcting for unexpected handling in specific ADO.NET providers.
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <param name="direction">The direction to set.</param>
+		abstract internal void SetDirection(DbParameter p, ParameterDirection direction);
+
+
+		/// <summary>
+		/// Set Value (and implicitly DbType) for single parameter, adding support for provider unsupported types, etc.
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		/// <param name="value">The non-null value to set. Nulls are handled in shared code.</param>
+		abstract internal void SetValue(DbParameter p, object value);
+
+
+		/// <summary>
+		/// Get the output Value from single parameter, adding support for provider unsupported types, etc.
+		/// </summary>
+		/// <param name="p">The parameter.</param>
+		abstract internal object GetValue(DbParameter p);
+
+
+#region Constants
+		// Mandatory constants every DB has to define. 
+		/// <summary>
+		/// The default sequence name for initializing the pk sequence name value in the ctor. 
+		/// </summary>
+		abstract internal string _defaultSequenceName { get; }
+		/// <summary>
+		/// Flag to signal whether the sequence retrieval call (if any) is executed before the insert query (true) or after (false). Not a const, to avoid warnings. 
+		/// </summary>
+		abstract internal bool _sequenceValueCallsBeforeMainInsert { get; }
+#endregion
+
+
+		/// <summary>
+		/// Set any DbCommand specific properties which are specific for a given ADO.NET provider. 
+		/// </summary>
+		/// <param name="toAlter">the command object to alter the properties of</param>
+		abstract internal void SetCommandSpecificProperties(DbCommand toAlter);
+
+
+		/// <summary>
+		/// Gets a default value for the column as defined in the schema.
+		/// </summary>
+		/// <param name="column">The column.</param>
+		/// <returns></returns>
+		abstract internal dynamic GetDefaultValue(dynamic column);
+
+
+		/// <summary>
+		/// Gets the aggregate function to use in a scalar query for the fragment specified
+		/// </summary>
+		/// <param name="aggregateCalled">The aggregate called on the dynamicmodel, which should be converted to a DB function. Expected to be lower case</param>
+		/// <returns>the aggregate function to use, or null if no aggregate function is supported for aggregateCalled</returns>
+		abstract internal string GetAggregateFunction(string aggregateCalled);
+
+
+		/// <summary>
+		/// Gets the sql statement to use for obtaining the identity value of the last insert.
+		/// </summary>
+		/// <returns></returns>
+		abstract internal string GetIdentityRetrievalScalarStatement(string primaryKeyFieldSequence);
+
+
+		/// <summary>
+		/// Gets the sql statement pattern for a count row query (count(*)). The pattern should include as place holders: {0} for source (FROM clause).
+		/// </summary>
+		/// <returns></returns>
+		abstract internal string GetCountRowQueryPattern();
+
+
+		/// <summary>
+		/// Gets the name of the parameter with the prefix to use in a query, e.g. @rawName or :rawName
+		/// </summary>
+		/// <param name="rawName">raw name of the parameter, without parameter prefix</param>
+		/// <returns>rawName prefixed with the db specific prefix (if any)</returns>
+		/// <remarks>
+		/// This more complicated pattern of prefixing is required for Devart but fortunately also works on Oracle/MySQL
+		/// </remarks>
+		abstract internal string PrefixParameterName(string rawName, DbCommand cmd = null);
+
+
+		/// <summary>
+		/// Gets the name of the parameter without the prefix, to use in results
+		/// </summary>
+		/// <param name="rawName">The name of the parameter, prefixed if we prefixed it above</param>
+		/// <returns>raw name</returns>
+		abstract internal string DeprefixParameterName(string dbParamName, DbCommand cmd);
+
+
+		/// <summary>
+		/// Gets the select query pattern, to use for building select queries. The pattern should include as place holders: {0} for project list, {1} for the source (FROM clause).
+		/// </summary>
+		/// <param name="limit">The limit for the resultset. 0 means no limit.</param>
+		/// <param name="whereClause">The where clause. Expected to have a prefix space if not empty</param>
+		/// <param name="orderByClause">The order by clause. Expected to have a prefix space if not empty</param>
+		/// <returns>
+		/// string pattern which is usable to build select queries.
+		/// </returns>
+		abstract internal string GetSelectQueryPattern(int limit, string whereClause, string orderByClause);
+
+
+		/// <summary>
+		/// Gets the insert query pattern, to use for building insert queries. The pattern should include as place holders: {0} for target, {1} for field list, {2} for parameter list
+		/// </summary>
+		/// <returns></returns>
+		abstract internal string GetInsertQueryPattern();
+
+
+		/// <summary>
+		/// Gets the update query pattern, to use for building update queries. The pattern should include as placeholders: {0} for target, {1} for field list with sets. Has to have
+		/// trailing space
+		/// </summary>
+		/// <returns></returns>
+		abstract internal string GetUpdateQueryPattern();
+
+
+		/// <summary>
+		/// Gets the delete query pattern, to use for building delete queries. The pattern should include as placeholders: {0} for the target. Has to have trailing space
+		/// </summary>
+		/// <returns></returns>
+		abstract internal string GetDeleteQueryPattern();
+
+
+		/// <summary>
+		/// Gets the name of the column using the expando object representing the column from the schema
+		/// </summary>
+		/// <param name="columnFromSchema">The column from schema in the form of an expando.</param>
+		/// <returns>the name of the column as defined in the schema</returns>
+		abstract internal string GetColumnName(dynamic columnFromSchema);
+
+
+		/// <summary>
+		/// Post-processes the query used to obtain the meta-data for the schema. If no post-processing is required, simply return a toList 
+		/// </summary>
+		/// <param name="toPostProcess">To post process.</param>
+		/// <returns></returns>
+		abstract internal IEnumerable<dynamic> PostProcessSchemaQuery(IEnumerable<dynamic> toPostProcess);
+
+
+		/// <summary>
+		/// Builds a paging query and count query pair. 
+		/// </summary>
+		/// <param name="db">Reference to the current DynamicModel.</param>
+		/// <param name="sql">The SQL statement to build the query pair for. Can be left empty, in which case the table name from the schema is used</param>
+		/// <param name="primaryKeyField">The primary key field. Used for ordering. If left empty the defined PK field is used</param>
+		/// <param name="whereClause">The where clause. Default is empty string.</param>
+		/// <param name="orderByClause">The order by clause. Default is empty string.</param>
+		/// <param name="columns">The columns to use in the project. Default is '*' (all columns, in table defined order).</param>
+		/// <param name="pageSize">Size of the page. Default is 20</param>
+		/// <param name="currentPage">The current page. 1-based. Default is 1.</param>
+		/// <returns>ExpandoObject with two properties: MainQuery for fetching the specified page and CountQuery for determining the total number of rows in the resultset</returns>
+		abstract internal dynamic BuildPagingQueryPair(string sql = "", string primaryKeyField = "", string whereClause = "", string orderByClause = "", string columns = "*", int pageSize = 20,
+											  int currentPage = 1);
+
+
+#region Properties
+		/// <summary>
+		/// Gets the table schema query to use to obtain meta-data for a given table and schema
+		/// </summary>
+		abstract internal string TableWithSchemaQuery { get; }
+
+		/// <summary>
+		/// Gets the table schema query to use to obtain meta-data for a given table which is specified as the single parameter
+		/// </summary>
+		abstract internal string TableWithoutSchemaQuery { get; }
+
+		/// <summary>
+		/// What the plugin is plugged into
+		/// </summary>
+		abstract internal DynamicModel _dynamicModel { get; set; }
+#endregion
 	}
 }

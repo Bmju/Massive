@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if !COREFX
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Data;
@@ -7,42 +8,45 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using Massive.Tests.MySql.TableClasses;
-using NUnit.Framework;
+using Xunit;
+#if !COREFX
 using SD.Tools.OrmProfiler.Interceptor;
+#endif
 
 namespace Massive.Tests.MySql
 {
-	[TestFixture("Devart.Data.MySql")]
-	public class DevartTests
+	public class DevartTests : IDisposable
 	{
-		private string ProviderName;
+		private readonly string OrmProfilerApplicationName = "Massive MySql Devart provider tests";
 
-		/// <summary>
-		/// Initialise tests for given provider
-		/// </summary>
-		/// <param name="providerName">Provider name</param>
-		public DevartTests(string providerName)
+		public DevartTests()
 		{
-			ProviderName = providerName;
+			Console.WriteLine("Entering " + OrmProfilerApplicationName);
+#if !COREFX
+			// The SD Tools wrapper is hiding the Devart DbCommand subclass ParameterCheck property which is tested here
+			//InterceptorCore.Initialize(OrmProfilerApplicationName);
+#endif
 		}
 
-		[OneTimeSetUp]
-		public void Setup()
+		public void Dispose()
 		{
-			// The SD Tools wrapper is hiding the Devart command ParameterCheck property which is used in this test
-			//InterceptorCore.Initialize("Massive MySql Devart driver tests .NET 4.0");
+			Console.WriteLine("Exiting " + OrmProfilerApplicationName);
 		}
 
+
+		private string ProviderName = "Devart.Data.MySql";
 
 		// Massive style calls to some examples from https://www.devart.com/dotconnect/mysql/docs/Parameters.html#inoutparams
 		#region Devart Examples
+		
 		/// <remarks>
 		/// Demonstrates that this Devart-specific syntax is possible in Massive;
 		/// although it pretty much stops looking much like Massive when used like this.
 		/// </remarks>
-		[Test]
+		[Fact]
 		public void Devart_ParameterCheck()
 		{
+			Console.WriteLine("Hello, World");
 			var db = new SPTestsDatabase(ProviderName);
 			var connection = db.OpenConnection();
 			var command = db.CreateCommandWithParams("testproc_in_out", isProcedure: true, connection: connection);
@@ -50,8 +54,9 @@ namespace Massive.Tests.MySql
 			command.Prepare(); // makes a round-trip to the database
 			command.Parameters["param1"].Value = 10;
 			var result = db.ExecuteWithParams(command);
-			Assert.AreEqual(20, result.param2);
+			Assert.Equal(20, result.param2);
 		}
 		#endregion
 	}
 }
+#endif

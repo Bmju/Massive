@@ -1,11 +1,14 @@
-﻿using System;
+﻿#if !COREFX
+using System;
 using System.Data;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Massive.Tests.Oracle.TableClasses;
-using NUnit.Framework;
+using Xunit;
+#if !COREFX
 using SD.Tools.OrmProfiler.Interceptor;
+#endif
 
 namespace Massive.Tests.Oracle
 {
@@ -16,50 +19,62 @@ namespace Massive.Tests.Oracle
 	/// <remarks>These tests run on x64 by default, as by default ODP.NET installs x64 only. If you have x86 ODP.NET installed, change the build directive to AnyCPU
 	/// in the project settings.<br/>
 	/// These tests use the SCOTT test DB shipped by Oracle. Your values may vary though. </remarks>
-	[TestFixture("Oracle.ManagedDataAccess.Client")]
-	[TestFixture("Oracle.DataAccess.Client")]
-	public class ReadWriteTests
+	public class ReadWriteTests : IDisposable
 	{
-		private string ProviderName;
+		public static IEnumerable<object[]> ProviderNames = new[] {
+			new object[] { "Oracle.ManagedDataAccess.Client" },
+			new object[] { "Oracle.DataAccess.Client" }
+		};
 
-		/// <summary>
-		/// Initialise tests for given provider
-		/// </summary>
-		/// <param name="providerName">Provider name</param>
-		public ReadWriteTests(string providerName)
+		private readonly string OrmProfilerApplicationName = "Massive Oracle read/write tests";
+
+
+		public ReadWriteTests()
 		{
-			ProviderName = providerName;
+			Console.WriteLine("Entering " + OrmProfilerApplicationName);
+#if !COREFX
+			InterceptorCore.Initialize(OrmProfilerApplicationName);
+#endif
 		}
 
-		[OneTimeSetUp]
-		public void Setup()
+
+		public void Dispose()
 		{
-			InterceptorCore.Initialize("Massive Oracle read/write tests .NET 4.0");
+			Console.WriteLine("Exiting " + OrmProfilerApplicationName);
+
+			foreach(object[] ProviderName in ProviderNames)
+			{
+				// delete all rows with department name 'Massive Dep'. 
+				var depts = new Department((string)ProviderName[0]);
+				depts.Delete(null, "DNAME=:0", "Massive Dep");
+			}
 		}
 
 
-		[Test]
-		public void Guid_Arg()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Guid_Arg(string ProviderName)
 		{
 			// Oracle has no Guid parameter support, Massive maps Guid to string in Oracle
-			var db = new DynamicModel(string.Format(TestConstants.ReadWriteTestConnectionStringName, ProviderName));
+			var db = new DynamicModel(string.Format(TestConstants.ReadWriteTestConnection, ProviderName));
 			var guid = Guid.NewGuid();
 			var inParams = new { inval = guid };
 			var outParams = new { val = new Guid() };
 			var command = db.CreateCommandWithParams("begin :val := :inval; end;", inParams: inParams, outParams: outParams);
-			Assert.AreEqual(DbType.String, command.Parameters[0].DbType);
+			Assert.Equal(DbType.String, command.Parameters[0].DbType);
 			var item = db.ExecuteWithParams(command);
-			Assert.AreEqual(typeof(string), item.val.GetType());
-			Assert.AreEqual(guid, new Guid(item.val));
+			Assert.Equal(typeof(string), item.val.GetType());
+			Assert.Equal(guid, new Guid(item.val));
 		}
 
 
-		[Test]
-		public void All_NoParameters()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void All_NoParameters(string ProviderName)
 		{
 			var depts = new Department(ProviderName);
 			var allRows = depts.All().ToList();
-			Assert.AreEqual(60, allRows.Count);
+			Assert.Equal(60, allRows.Count);
 			foreach(var d in allRows)
 			{
 				Console.WriteLine("{0} {1} {2}", d.DEPTNO, d.DNAME, d.LOC);
@@ -67,101 +82,114 @@ namespace Massive.Tests.Oracle
 		}
 
 
-		[Test]
-		public void All_LimitSpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void All_LimitSpecification(string ProviderName)
 		{
 			var depts = new Department(ProviderName);
 			var allRows = depts.All(limit: 10).ToList();
-			Assert.AreEqual(10, allRows.Count);
+			Assert.Equal(10, allRows.Count);
 		}
 
 
-		[Test]
-		public void All_WhereSpecification_OrderBySpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void All_WhereSpecification_OrderBySpecification(string ProviderName)
 		{
 			var depts = new Department(ProviderName);
 			var allRows = depts.All(orderBy: "DEPTNO DESC", where: "WHERE LOC=:0", args: "Nowhere").ToList();
-			Assert.AreEqual(9, allRows.Count);
+			Assert.Equal(9, allRows.Count);
 			int previous = int.MaxValue;
 			foreach(var r in allRows)
 			{
 				int current = r.DEPTNO;
-				Assert.IsTrue(current <= previous);
+				Assert.True(current <= previous);
 				previous = current;
 			}
 		}
 
 
-		[Test]
-		public void All_WhereSpecification_OrderBySpecification_LimitSpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void All_WhereSpecification_OrderBySpecification_LimitSpecification(string ProviderName)
 		{
 			var depts = new Department(ProviderName);
 			var allRows = depts.All(limit: 6, orderBy: "DEPTNO DESC", where: "WHERE LOC=:0", args: "Nowhere").ToList();
-			Assert.AreEqual(6, allRows.Count);
+			Assert.Equal(6, allRows.Count);
 			int previous = int.MaxValue;
 			foreach(var r in allRows)
 			{
 				int current = r.DEPTNO;
-				Assert.IsTrue(current <= previous);
+				Assert.True(current <= previous);
 				previous = current;
 			}
 		}
 
 
-		[Test]
-		public void Paged_NoSpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Paged_NoSpecification(string ProviderName)
 		{
 			var depts = new Department(ProviderName);
 			// no order by, so in theory this is useless. It will order on PK though
 			var page2 = depts.Paged(currentPage: 2, pageSize: 10);
 			var pageItems = ((IEnumerable<dynamic>)page2.Items).ToList();
-			Assert.AreEqual(10, pageItems.Count);
-			Assert.AreEqual(60, page2.TotalRecords);
+			Assert.Equal(10, pageItems.Count);
+			Assert.Equal(60, page2.TotalRecords);
 		}
 
 
-		[Test]
-		public void Paged_OrderBySpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Paged_OrderBySpecification(string ProviderName)
 		{
 			var depts = new Department(ProviderName);
 			var page2 = depts.Paged(orderBy: "DEPTNO DESC", currentPage: 2, pageSize: 10);
 			var pageItems = ((IEnumerable<dynamic>)page2.Items).ToList();
-			Assert.AreEqual(10, pageItems.Count);
-			Assert.AreEqual(60, page2.TotalRecords);
+			Assert.Equal(10, pageItems.Count);
+			Assert.Equal(60, page2.TotalRecords);
 		}
 
-		[Test]
-		public void Paged_SqlSpecification()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Paged_SqlSpecification(string ProviderName)
 		{
 			var depts = new Department(ProviderName);
 			var page2 = depts.Paged(sql: "SELECT * FROM DEPT", primaryKey: "DEPTNO", pageSize: 10, currentPage: 2);
 			var pageItems = ((IEnumerable<dynamic>)page2.Items).ToList();
-			Assert.AreEqual(10, pageItems.Count);
-			Assert.AreEqual(60, page2.TotalRecords);
+			Assert.Equal(10, pageItems.Count);
+			Assert.Equal(60, page2.TotalRecords);
 		}
 
-		[Test]
-		public void Insert_SingleRow()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Insert_SingleRow(string ProviderName)
 		{
 			var depts = new Department(ProviderName);
 			var inserted = depts.Insert(new { DNAME = "Massive Dep", LOC = "Beach" });
-			Assert.IsTrue(inserted.DEPTNO > 0);
-			Assert.AreEqual(1, depts.Delete(inserted.DEPTNO));
+			Assert.True(inserted.DEPTNO > 0);
+			Assert.Equal(1, depts.Delete(inserted.DEPTNO));
 		}
 
-		[Test]
-		public void Save_SingleRow()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Save_SingleRow(string ProviderName)
 		{
 			var depts = new Department(ProviderName);
-			dynamic toSave = new {DNAME = "Massive Dep", LOC = "Beach"}.ToExpando();
+			dynamic toSave = new { DNAME = "Massive Dep", LOC = "Beach" }.ToExpando();
 			var result = depts.Save(toSave);
-			Assert.AreEqual(1, result);
-			Assert.IsTrue(toSave.DEPTNO > 0);
-			Assert.AreEqual(1, depts.Delete(toSave.DEPTNO));
+			Assert.Equal(1, result);
+			Assert.True(toSave.DEPTNO > 0);
+			Assert.Equal(1, depts.Delete(toSave.DEPTNO));
 		}
 
-		[Test]
-		public void Save_MultipleRows()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Save_MultipleRows(string ProviderName)
 		{
 			var depts = new Department(ProviderName);
 			object[] toSave = new object[]
@@ -170,30 +198,22 @@ namespace Massive.Tests.Oracle
 									   new {DNAME = "Massive Dep", LOC = "DownTown"}.ToExpando()
 								   };
 			var result = depts.Save(toSave);
-			Assert.AreEqual(2, result);
+			Assert.Equal(2, result);
 			foreach(dynamic o in toSave)
 			{
-				Assert.IsTrue(o.DEPTNO > 0);
+				Assert.True(o.DEPTNO > 0);
 			}
 
 			// read them back, update them, save them again, 
-			var savedDeps = depts.All(where: "WHERE DEPTNO=:0 OR DEPTNO=:1", args: new object[] {((dynamic)toSave[0]).DEPTNO, ((dynamic)toSave[1]).DEPTNO}).ToList();
-			Assert.AreEqual(2, savedDeps.Count);
+			var savedDeps = depts.All(where: "WHERE DEPTNO=:0 OR DEPTNO=:1", args: new object[] { ((dynamic)toSave[0]).DEPTNO, ((dynamic)toSave[1]).DEPTNO }).ToList();
+			Assert.Equal(2, savedDeps.Count);
 			savedDeps[0].LOC += "C";
 			savedDeps[1].LOC += "C";
 			result = depts.Save(toSave);
-			Assert.AreEqual(2, result);
-			Assert.AreEqual(1, depts.Delete(savedDeps[0].DEPTNO));
-			Assert.AreEqual(1, depts.Delete(savedDeps[1].DEPTNO));
-		}
-
-
-		[OneTimeTearDown]
-		public void CleanUp()
-		{
-			// delete all rows with department name 'Massive Dep'. 
-			var depts = new Department(ProviderName);
-			depts.Delete(null, "DNAME=:0", "Massive Dep");
+			Assert.Equal(2, result);
+			Assert.Equal(1, depts.Delete(savedDeps[0].DEPTNO));
+			Assert.Equal(1, depts.Delete(savedDeps[1].DEPTNO));
 		}
 	}
 }
+#endif

@@ -1,11 +1,11 @@
 ﻿///////////////////////////////////////////////////////////////////////////////////////////////////
-// Massive v2.0. PostgreSql specific code. 
+// Massive v3.0. PostgreSql specific code. 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Licensed to you under the New BSD License
 // http://www.opensource.org/licenses/bsd-license.php
-// Massive is copyright (c) 2009-2016 various contributors.
+// Massive is copyright (c) 2009-2017 various contributors.
 // All rights reserved.
-// See for sourcecode, full history and contributors list: https://github.com/FransBouma/Massive
+// See for sourcecode, full history and contributors list: https://github.com/MikeBeaton/Massive
 //
 // Redistribution and use in source and binary forms, with or without modification, are permitted 
 // provided that the following conditions are met:
@@ -38,7 +38,7 @@ using System.Text;
 namespace Massive
 {
 	// Cursor dereferencing data reader, which may go back into Npgsql at some point
-	public class NpgsqlDereferencingReader : DbDataReader
+	internal class NpgsqlDereferencingReader : DbDataReader, IDisposable
 	{
 		private DbConnection Connection;
 		private DynamicModel Db;
@@ -64,9 +64,9 @@ namespace Massive
 		/// https://github.com/npgsql/npgsql/issues/438
 		/// http://stackoverflow.com/questions/42292341/
 		/// </remarks>
-		internal NpgsqlDereferencingReader(DbDataReader reader, DbConnection connection, DynamicModel db, int fetchSize)
+		internal NpgsqlDereferencingReader(DbDataReader reader, DbConnection connection, DynamicModel db)
 		{
-			FetchSize = fetchSize;
+			FetchSize = db.NpgsqlAutoDereferenceFetchSize;
 			Connection = connection;
 			Db = db;
 
@@ -83,7 +83,6 @@ namespace Massive
 					}
 				}
 			}
-			reader.Close();
 			reader.Dispose();
 
 			NextResult();
@@ -117,7 +116,6 @@ namespace Massive
 			// close and dispose current fetch reader for this cursor
 			if(Reader != null && !Reader.IsClosed)
 			{
-				Reader.Close();
 				Reader.Dispose();
 			}
 			// close cursor itself
@@ -145,7 +143,6 @@ namespace Massive
 			// close and dispose previous fetch reader for this cursor
 			if(Reader != null && !Reader.IsClosed)
 			{
-				Reader.Close();
 				Reader.Dispose();
 			}
 			// fetch next n from cursor;
@@ -156,7 +153,7 @@ namespace Massive
 			Count = 0;
 		}
 
-		#region DbDataReader abstract interface
+#region DbDataReader abstract interface
 		public override object this[string name] { get { return Reader[name]; } }
 		public override object this[int i] { get { return Reader[i]; } }
 		public override int Depth { get { return Reader.Depth; } }
@@ -165,10 +162,12 @@ namespace Massive
 		public override bool IsClosed { get { return Reader.IsClosed; } }
 		public override int RecordsAffected { get { return Reader.RecordsAffected; } }
 
+#if !COREFX
 		public override void Close()
 		{
 			CloseCursor();
 		}
+#endif
 
 		public override bool GetBoolean(int i) { return Reader.GetBoolean(i); }
 		public override byte GetByte(int i) { return Reader.GetByte(i); }
@@ -190,8 +189,10 @@ namespace Massive
 		public override int GetInt32(int i) { return Reader.GetInt32(i); }
 		public override long GetInt64(int i) { return Reader.GetInt64(i); }
 		public override string GetName(int i) { return Reader.GetName(i); }
-		public override int GetOrdinal(string name) { return Reader.GetOrdinal(name); }
+#if !COREFX
 		public override DataTable GetSchemaTable() { return Reader.GetSchemaTable(); }
+#endif
+		public override int GetOrdinal(string name) { return Reader.GetOrdinal(name); }
 		public override string GetString(int i) { return Reader.GetString(i); }
 		public override object GetValue(int i) { return Reader.GetValue(i); }
 		public override int GetValues(object[] values) { return Reader.GetValues(values); }
@@ -230,21 +231,36 @@ namespace Massive
 			// recursive self-call
 			return Read();
 		}
-		#endregion
-	}
+#endregion
 
+		public new void Dispose()
+		{
+			CloseCursor();
+			base.Dispose();
+		}
+	}
+}
+
+namespace Massive.Plugin
+{	
 	/// <summary>
-	/// Class which provides extension methods for various ADO.NET objects.
+	/// A class that wraps your database in Dynamic Funtime
 	/// </summary>
-	public static partial class ObjectExtensions
+	internal class PostgreSql : IDatabasePlugin
 	{
+		/// <summary>
+		/// What the plugin's plugged into
+		/// </summary>
+		internal override DynamicModel _dynamicModel { get; set; }
+
+
 		/// <summary>
 		/// True iff current reader has cursors in its output types.
 		/// </summary>
 		/// <param name="reader">The reader to check</param>
 		/// <returns>Are there cursors?</returns>
 		/// <remarks>Part of NpgsqlDereferencingReader</remarks>
-		private static bool CanDereference(this DbDataReader reader)
+		internal bool CanDereference(DbDataReader reader)
 		{
 			bool hasCursors = false;
 			for(int i = 0; i < reader.FieldCount; i++)
@@ -270,15 +286,15 @@ namespace Massive
 		/// https://github.com/npgsql/npgsql/issues/438
 		/// http://stackoverflow.com/questions/42292341/
 		/// </remarks>
-		internal static DbDataReader ExecuteDereferencingReader(this DbCommand cmd, DbConnection Connection, DynamicModel db)
+		internal override DbDataReader ExecuteDereferencingReader(DbCommand cmd, DbConnection Connection)
 		{
 			var reader = cmd.ExecuteReader(); // var reader = Execute(behavior);
 
 			// Remarks: Do not consider dereferencing if no returned columns are cursors, but if just some are cursors then follow the pre-existing convention set by
 			// the Oracle drivers and dereference what we can. The rest of the pattern is that we only ever try to dereference on Query and Scalar, never on Execute.
-			if(db.AutoDereferenceCursors && reader.CanDereference())
+			if(_dynamicModel.NpgsqlAutoDereferenceCursors && CanDereference(reader))
 			{
-				return new NpgsqlDereferencingReader(reader, Connection, db, db.AutoDereferenceFetchSize);
+				return new NpgsqlDereferencingReader(reader, Connection, _dynamicModel);
 			}
 
 			return reader;
@@ -294,16 +310,16 @@ namespace Massive
 		/// <remarks>
 		/// Only relevant to Postgres cursor dereferencing and in this case we also do some relevant pre-processing of the command.
 		/// </remarks>
-		internal static bool RequiresWrappingTransaction(this DbCommand cmd, DynamicModel db)
+		internal override bool RequiresWrappingTransaction(DbCommand cmd)
 		{
-			if (!db.AutoDereferenceCursors)
+			if (!_dynamicModel.NpgsqlAutoDereferenceCursors)
 			{
 				// Do not request wrapping transaction if auto-dereferencing is off
 				return false;
 			}
 			// If we've got cursor parameters these are actually just placeholders to kick off cursor support (i.e. the wrapping transaction); we need to remove them before executing the command.
 			bool isCursorCommand = false;
-			cmd.Parameters.Cast<DbParameter>().Where(p => p.IsCursor()).ToList().ForEach(p => { isCursorCommand = true; cmd.Parameters.Remove(p); });
+			cmd.Parameters.Cast<DbParameter>().Where(p => _dynamicModel._plugin.IsCursor(p)).ToList().ForEach(p => { isCursorCommand = true; cmd.Parameters.Remove(p); });
 			return isCursorCommand;
 		}
 
@@ -314,7 +330,7 @@ namespace Massive
 		/// <param name="p">The parameter.</param>
 		/// <param name="value">Object reference to an existing cursor from a previous output or return direction cursor parameter, or null.</param>
 		/// <returns>Returns false if not supported on this provider.</returns>
-		private static bool SetCursor(this DbParameter p, object value)
+		internal override bool SetCursor(DbParameter p, object value)
 		{
 			p.SetRuntimeEnumProperty("NpgsqlDbType", "Refcursor");
 			p.Value = value;
@@ -327,7 +343,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="p">The parameter.</param>
 		/// <returns>true if this is a cursor parameter.</returns>
-		private static bool IsCursor(this DbParameter p)
+		internal override bool IsCursor(DbParameter p)
 		{
 			return p.GetRuntimeEnumProperty("NpgsqlDbType") == "Refcursor";
 		}
@@ -338,7 +354,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="p">The parameter.</param>
 		/// <returns>Returns false if not supported on this provider.</returns>
-		private static bool SetAnonymousParameter(this DbParameter p)
+		internal override bool SetAnonymousParameter(DbParameter p)
 		{
 			// pretty simple! but assume in principle more could be needed in some other provider
 			p.ParameterName = "";
@@ -351,7 +367,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="p">The parameter.</param>
 		/// <returns>True if output parameter type is ignored when generating output data types.</returns>
-		private static bool IgnoresOutputTypes(this DbParameter p)
+		internal override bool IgnoresOutputTypes(DbParameter p)
 		{
 			return true;
 		}
@@ -362,7 +378,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="p">The parameter.</param>
 		/// <param name="direction">The direction to set.</param>
-		private static void SetDirection(this DbParameter p, ParameterDirection direction)
+		internal override void SetDirection(DbParameter p, ParameterDirection direction)
 		{
 			// Postgres/Npgsql specific fix: return params are always returned unchanged, return values are accessed using output params
 			p.Direction = (direction == ParameterDirection.ReturnValue) ? ParameterDirection.Output : direction;
@@ -374,7 +390,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="p">The parameter.</param>
 		/// <param name="value">The non-null value to set. Nulls are handled in shared code.</param>
-		private static void SetValue(this DbParameter p, object value)
+		internal override void SetValue(DbParameter p, object value)
 		{
 			p.Value = value;
 			var valueAsString = value as string;
@@ -389,35 +405,38 @@ namespace Massive
 		/// Extension to get the output Value from single parameter, adding support for provider unsupported types, etc.
 		/// </summary>
 		/// <param name="p">The parameter.</param>
-		private static object GetValue(this DbParameter p)
+		internal override object GetValue(DbParameter p)
 		{
 			return p.Value;
 		}
-	}
 
-	/// <summary>
-	/// A class that wraps your database table in Dynamic Funtime
-	/// </summary>
-	public partial class DynamicModel
-	{
-		#region Constants
+		
+#region Constants
 		// Mandatory constants/variables every DB has to define. 
 		/// <summary>
 		/// The default sequence name for initializing the pk sequence name value in the ctor. 
 		/// </summary>
-		internal const string _defaultSequenceName = "";
+		internal override string _defaultSequenceName { get { return ""; } }
 		/// <summary>
 		/// Flag to signal whether the sequence retrieval call (if any) is executed before the insert query (true) or after (false). Not a const, to avoid warnings. 
 		/// </summary>
-		private bool _sequenceValueCallsBeforeMainInsert = true;
-		#endregion
+		internal override bool _sequenceValueCallsBeforeMainInsert { get { return true; } }
+#endregion
+
+
+		/// <summary>
+		/// Set any DbCommand specific properties which are specific for a given ADO.NET provider. 
+		/// </summary>
+		/// <param name="toAlter">the command object to alter the properties of</param>
+		internal override void SetCommandSpecificProperties(DbCommand toAlter) { }
+
 
 		/// <summary>
 		/// Gets a default value for the column as defined in the schema.
 		/// </summary>
 		/// <param name="column">The column.</param>
 		/// <returns></returns>
-		private dynamic GetDefaultValue(dynamic column)
+		internal override dynamic GetDefaultValue(dynamic column)
 		{
 			string defaultValue = column.COLUMN_DEFAULT;
 			if(string.IsNullOrEmpty(defaultValue))
@@ -448,7 +467,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="aggregateCalled">The aggregate called on the dynamicmodel, which should be converted to a DB function. Expected to be lower case</param>
 		/// <returns>the aggregate function to use, or null if no aggregate function is supported for aggregateCalled</returns>
-		protected virtual string GetAggregateFunction(string aggregateCalled)
+		internal override string GetAggregateFunction(string aggregateCalled)
 		{
 			switch(aggregateCalled)
 			{
@@ -470,9 +489,9 @@ namespace Massive
 		/// Gets the sql statement to use for obtaining the identity/sequenced value of the last insert.
 		/// </summary>
 		/// <returns></returns>
-		protected virtual string GetIdentityRetrievalScalarStatement()
+		internal override string GetIdentityRetrievalScalarStatement(string primaryKeyFieldSequence)
 		{
-			return string.IsNullOrEmpty(_primaryKeyFieldSequence) ? string.Empty : string.Format("SELECT nextval('{0}')", _primaryKeyFieldSequence);
+			return string.IsNullOrEmpty(primaryKeyFieldSequence) ? string.Empty : string.Format("SELECT nextval('{0}')", primaryKeyFieldSequence);
 		}
 
 
@@ -480,7 +499,7 @@ namespace Massive
 		/// Gets the sql statement pattern for a count row query (count(*)). The pattern should include as place holders: {0} for source (FROM clause).
 		/// </summary>
 		/// <returns></returns>
-		protected virtual string GetCountRowQueryPattern()
+		internal override string GetCountRowQueryPattern()
 		{
 			return "SELECT COUNT(*) FROM {0}";
 		}
@@ -491,7 +510,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="rawName">raw name of the parameter, without parameter prefix</param>
 		/// <returns>rawName prefixed with the db specific prefix (if any)</returns>
-		internal static string PrefixParameterName(string rawName, DbCommand cmd = null)
+		internal override string PrefixParameterName(string rawName, DbCommand cmd = null)
 		{
 			return (cmd != null) ? rawName : (":" + rawName);
 		}
@@ -502,7 +521,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="rawName">The name of the parameter, prefixed if we prefixed it above</param>
 		/// <returns>raw name</returns>
-		internal static string DeprefixParameterName(string dbParamName, DbCommand cmd)
+		internal override string DeprefixParameterName(string dbParamName, DbCommand cmd)
 		{
 			return dbParamName;
 		}
@@ -517,7 +536,7 @@ namespace Massive
 		/// <returns>
 		/// string pattern which is usable to build select queries.
 		/// </returns>
-		protected virtual string GetSelectQueryPattern(int limit, string whereClause, string orderByClause)
+		internal override string GetSelectQueryPattern(int limit, string whereClause, string orderByClause)
 		{
 			return string.Format("SELECT {{0}} FROM {{1}}{0}{1}{2}", whereClause, orderByClause, limit > 0 ? " LIMIT " + limit : string.Empty);
 		}
@@ -527,7 +546,7 @@ namespace Massive
 		/// Gets the insert query pattern, to use for building insert queries. The pattern should include as place holders: {0} for target, {1} for field list, {2} for parameter list
 		/// </summary>
 		/// <returns></returns>
-		protected virtual string GetInsertQueryPattern()
+		internal override string GetInsertQueryPattern()
 		{
 			return "INSERT INTO {0} ({1}) VALUES ({2})";
 		}
@@ -538,7 +557,7 @@ namespace Massive
 		/// trailing space
 		/// </summary>
 		/// <returns></returns>
-		protected virtual string GetUpdateQueryPattern()
+		internal override string GetUpdateQueryPattern()
 		{
 			return "UPDATE {0} SET {1} ";
 		}
@@ -548,7 +567,7 @@ namespace Massive
 		/// Gets the delete query pattern, to use for building delete queries. The pattern should include as placeholders: {0} for the target. Has to have trailing space
 		/// </summary>
 		/// <returns></returns>
-		protected virtual string GetDeleteQueryPattern()
+		internal override string GetDeleteQueryPattern()
 		{
 			return "DELETE FROM {0} ";
 		}
@@ -559,7 +578,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="columnFromSchema">The column from schema in the form of an expando.</param>
 		/// <returns>the name of the column as defined in the schema</returns>
-		protected virtual string GetColumnName(dynamic columnFromSchema)
+		internal override string GetColumnName(dynamic columnFromSchema)
 		{
 			return columnFromSchema.COLUMN_NAME;
 		}
@@ -570,7 +589,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="toPostProcess">To post process.</param>
 		/// <returns></returns>
-		private IEnumerable<dynamic> PostProcessSchemaQuery(IEnumerable<dynamic> toPostProcess)
+		internal override IEnumerable<dynamic> PostProcessSchemaQuery(IEnumerable<dynamic> toPostProcess)
 		{
 			return toPostProcess == null ? new List<dynamic>() : toPostProcess.ToList();
 		}
@@ -579,6 +598,7 @@ namespace Massive
 		/// <summary>
 		/// Builds a paging query and count query pair. 
 		/// </summary>
+		/// <param name="db">Reference to the current DynamicModel.</param>
 		/// <param name="sql">The SQL statement to build the query pair for. Can be left empty, in which case the table name from the schema is used</param>
 		/// <param name="primaryKeyField">The primary key field. Used for ordering. If left empty the defined PK field is used</param>
 		/// <param name="whereClause">The where clause. Default is empty string.</param>
@@ -587,12 +607,12 @@ namespace Massive
 		/// <param name="pageSize">Size of the page. Default is 20</param>
 		/// <param name="currentPage">The current page. 1-based. Default is 1.</param>
 		/// <returns>ExpandoObject with two properties: MainQuery for fetching the specified page and CountQuery for determining the total number of rows in the resultset</returns>
-		private dynamic BuildPagingQueryPair(string sql = "", string primaryKeyField = "", string whereClause = "", string orderByClause = "", string columns = "*", int pageSize = 20,
+		internal override dynamic BuildPagingQueryPair(string sql = "", string primaryKeyField = "", string whereClause = "", string orderByClause = "", string columns = "*", int pageSize = 20,
 											 int currentPage = 1)
 		{
-			var orderByClauseFragment = string.IsNullOrEmpty(orderByClause) ? string.Format(" ORDER BY {0}", string.IsNullOrEmpty(primaryKeyField) ? PrimaryKeyField : primaryKeyField)
-																			: ReadifyOrderByClause(orderByClause);
-			var coreQuery = string.Format(this.GetSelectQueryPattern(0, ReadifyWhereClause(whereClause), orderByClauseFragment), columns, string.IsNullOrEmpty(sql) ? this.TableName : sql);
+			var orderByClauseFragment = string.IsNullOrEmpty(orderByClause) ? string.Format(" ORDER BY {0}", string.IsNullOrEmpty(primaryKeyField) ? _dynamicModel.PrimaryKeyField : primaryKeyField)
+																			: _dynamicModel.ReadifyOrderByClause(orderByClause);
+			var coreQuery = string.Format(this.GetSelectQueryPattern(0, _dynamicModel.ReadifyWhereClause(whereClause), orderByClauseFragment), columns, string.IsNullOrEmpty(sql) ? _dynamicModel.TableName : sql);
 			dynamic toReturn = new ExpandoObject();
 			toReturn.CountQuery = string.Format("SELECT COUNT(*) FROM ({0}) q", coreQuery);
 			var pageStart = (currentPage - 1) * pageSize;
@@ -601,11 +621,11 @@ namespace Massive
 		}
 
 
-		#region Properties
+#region Properties
 		/// <summary>
 		/// Gets the table schema query to use to obtain meta-data for a given table and schema
 		/// </summary>
-		protected virtual string TableWithSchemaQuery
+		internal override string TableWithSchemaQuery
 		{
 			get { return "SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = :0 AND TABLE_SCHEMA = :1"; }
 		}
@@ -613,25 +633,10 @@ namespace Massive
 		/// <summary>
 		/// Gets the table schema query to use to obtain meta-data for a given table which is specified as the single parameter.
 		/// </summary>
-		protected virtual string TableWithoutSchemaQuery
+		internal override string TableWithoutSchemaQuery
 		{
 			get { return "SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = :0"; }
 		}
-
-		/// <summary>
-		/// Whether to dereference cursors.
-		/// </summary>
-		public bool AutoDereferenceCursors { get; set; } = true;
-
-		/// <summary>
-		/// The number of rows to fetch at once when dereferencing cursors.
-		/// Set to zero or negative for FETCH ALL, but use with care this will cause huge PostgreSQL server-side buffering on large cursors.
-		/// </summary>
-		/// <remarks>
-		/// This is large enough to get the data back reasonably quickly for most users, but might be too large for an application
-		/// which requires multiple large cursors open at once.
-		/// </remarks>
-		public int AutoDereferenceFetchSize { get; set; } = 10000;
-		#endregion
+#endregion
 	}
 }

@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text;
-using NUnit.Framework;
+using Xunit;
 using Massive.Tests.Sqlite.TableClasses;
+#if !COREFX
 using SD.Tools.OrmProfiler.Interceptor;
+#endif
 
 namespace Massive.Tests.Sqlite
 {
@@ -15,123 +17,132 @@ namespace Massive.Tests.Sqlite
 	/// </summary>
 	/// <remarks>Tests use the Chinook example DB (https://chinookdatabase.codeplex.com/releases/view/55681), autonumber variant. 
 	/// Writes are done on Playlist, reads on other tables.</remarks>
-	[TestFixture]
-    public class ReadWriteTests
+	public class ReadWriteTests : IDisposable
     {
-		[SetUp]
-		public void Setup()
+		private readonly string OrmProfilerApplicationName = "Sqlite Read/Write tests";
+
+		public ReadWriteTests()
 		{
-			InterceptorCore.Initialize("Sqlite Read/Write tests");
+			Console.WriteLine("Entering " + OrmProfilerApplicationName);
+#if !COREFX
+			InterceptorCore.Initialize(OrmProfilerApplicationName);
+#endif
+		}
+
+		public void Dispose()
+		{
+			Console.WriteLine("Exiting " + OrmProfilerApplicationName);
+
+			// delete all rows with ProductName 'Massive Product'. 
+			var playlists = new Playlist();
+			playlists.Delete(null, "Name=@0", "MassivePlaylist");
 		}
 
 
-		[Test]
+		[Fact]
 		public void Guid_Arg()
 		{
-			// Sqlite has native Guid parameter support, but the SELECT output is a byte[16] array
-			var db = new DynamicModel(TestConstants.ReadWriteTestConnectionStringName);
+			var db = new DynamicModel(TestConstants.ReadWriteTestConnection);
 			var guid = Guid.NewGuid();
 			var command = db.CreateCommand("SELECT @0 AS val", null, guid);
-			Assert.AreEqual(DbType.Guid, command.Parameters[0].DbType);
+#if COREFX
+			// For some reason .NET Core provider doesn't have DbType.Guid support even though .NET Framework provider does
+			Assert.Equal(DbType.String, command.Parameters[0].DbType);
+#else
+			Assert.Equal(DbType.Guid, command.Parameters[0].DbType);
+#endif
 			var item = db.Query(command).FirstOrDefault();
-			Assert.AreEqual(typeof(byte[]), item.val.GetType());
-			Assert.AreEqual(guid, new Guid(item.val));
+			// The output from the provider is a bunch of bytes either way, so we stick with the provider
+			// default here (especially since it is the same in both cases).
+			Assert.Equal(typeof(byte[]), item.val.GetType());
+			Assert.Equal(guid, new Guid(item.val));
 		}
 
 
-		[Test]
+		[Fact]
 		public void All_NoParameters()
 		{
 			var albums = new Album();
 			var allRows = albums.All().ToList();
-			Assert.AreEqual(347, allRows.Count);
+			Assert.Equal(347, allRows.Count);
 			foreach(var a in allRows)
 			{
 				Console.WriteLine("{0} {1}", a.AlbumId, a.Title);
 			}
 		}
 
-		[Test]
+		[Fact]
 		public void All_LimitSpecification()
 		{
 			var albums = new Album();
 			var allRows = albums.All(limit: 10).ToList();
-			Assert.AreEqual(10, allRows.Count);
+			Assert.Equal(10, allRows.Count);
 		}
 
 
-		[Test]
+		[Fact]
 		public void All_WhereSpecification_OrderBySpecification()
 		{
 			var albums = new Album();
 			var allRows = albums.All(orderBy: "Title DESC", where: "WHERE ArtistId=@0", args: 90).ToList();
-			Assert.AreEqual(21, allRows.Count);
+			Assert.Equal(21, allRows.Count);
 			string previous = string.Empty;
 			foreach(var r in allRows)
 			{
 				string current = r.Title;
-				Assert.IsTrue(string.IsNullOrEmpty(previous) || string.Compare(previous, current) > 0);
+				Assert.True(string.IsNullOrEmpty(previous) || string.Compare(previous, current) > 0);
 				previous = current;
 			}
 		}
 
 
-		[Test]
+		[Fact]
 		public void All_WhereSpecification_OrderBySpecification_LimitSpecification()
 		{
 			var albums = new Album();
 			var allRows = albums.All(limit: 6, orderBy: "Title DESC", where: "ArtistId=@0", args: 90).ToList();
-			Assert.AreEqual(6, allRows.Count);
+			Assert.Equal(6, allRows.Count);
 			string previous = string.Empty;
 			foreach(var r in allRows)
 			{
 				string current = r.Title;
-				Assert.IsTrue(string.IsNullOrEmpty(previous) || string.Compare(previous, current) > 0);
+				Assert.True(string.IsNullOrEmpty(previous) || string.Compare(previous, current) > 0);
 				previous = current;
 			}
 		}
 
 
-		[Test]
+		[Fact]
 		public void Paged_NoSpecification()
 		{
 			var albums = new Album();
 			// no order by, so in theory this is useless. It will order on PK though
 			var page2 = albums.Paged(currentPage: 3, pageSize: 13);
 			var pageItems = ((IEnumerable<dynamic>)page2.Items).ToList();
-			Assert.AreEqual(13, pageItems.Count);
-			Assert.AreEqual(27, pageItems[0].AlbumId);
-			Assert.AreEqual(347, page2.TotalRecords);
+			Assert.Equal(13, pageItems.Count);
+			Assert.Equal(27, pageItems[0].AlbumId);
+			Assert.Equal(347, page2.TotalRecords);
 		}
 
 
-		[Test]
+		[Fact]
 		public void Paged_OrderBySpecification()
 		{
 			var albums = new Album();
 			var page2 = albums.Paged(orderBy: "Title DESC", currentPage: 3, pageSize: 13);
 			var pageItems = ((IEnumerable<dynamic>)page2.Items).ToList();
-			Assert.AreEqual(13, pageItems.Count);
-			Assert.AreEqual(174, pageItems[0].AlbumId);
-			Assert.AreEqual(347, page2.TotalRecords);
+			Assert.Equal(13, pageItems.Count);
+			Assert.Equal(174, pageItems[0].AlbumId);
+			Assert.Equal(347, page2.TotalRecords);
 		}
 
 
-		[Test]
+		[Fact]
 		public void Insert_SingleRow()
 		{
 			var playlists = new Playlist();
 			var inserted = playlists.Insert(new { Name = "MassivePlaylist" });
-			Assert.IsTrue(inserted.PlaylistId > 0);
-		}
-
-
-		[TearDown]
-		public void CleanUp()
-		{
-			// delete all rows with ProductName 'Massive Product'. 
-			var playlists = new Playlist();
-			playlists.Delete(null, "Name=@0", "MassivePlaylist");
+			Assert.True(inserted.PlaylistId > 0);
 		}
     }
 }

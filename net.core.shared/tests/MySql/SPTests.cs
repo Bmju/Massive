@@ -7,39 +7,45 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using Massive.Tests.MySql.TableClasses;
-using NUnit.Framework;
+using Xunit;
+#if !COREFX
 using SD.Tools.OrmProfiler.Interceptor;
+#endif
 
 namespace Massive.Tests.MySql
 {
-	[TestFixture("MySql.Data.MySqlClient")]
-	[TestFixture("Devart.Data.MySql")]
-	public class SPTests
+	public class SPTests : IDisposable
 	{
-		private string ProviderName;
+		public static IEnumerable<object[]> ProviderNames = new[] {
+			new object[] { "MySql.Data.MySqlClient" }
+#if !COREFX
+		  , new object[] { "Devart.Data.MySql" }
+#endif
+		};
 
-		/// <summary>
-		/// Initialise tests for given provider
-		/// </summary>
-		/// <param name="providerName">Provider name</param>
-		public SPTests(string providerName)
+		private readonly string OrmProfilerApplicationName = "Massive MySql stored procedure tests";
+
+		public SPTests()
 		{
-			ProviderName = providerName;
+			Console.WriteLine("Entering " + OrmProfilerApplicationName);
+#if !COREFX
+			InterceptorCore.Initialize(OrmProfilerApplicationName);
+#endif
 		}
 
-		[OneTimeSetUp]
-		public void Setup()
+		public void Dispose()
 		{
-			InterceptorCore.Initialize("Massive MySql stored procedure tests .NET 4.0");
+			Console.WriteLine("Exiting " + OrmProfilerApplicationName);
 		}
 
 
-		[Test]
-		public void Procedure_Call()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Procedure_Call(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			var result = db.ExecuteAsProcedure("rewards_report_for_date", inParams: new { min_monthly_purchases = 3, min_dollar_amount_purchased = 20, report_date = new DateTime(2005, 5, 1) }, outParams: new { count_rewardees = 0 });
-			Assert.AreEqual(27, result.count_rewardees);
+			Assert.Equal(27, result.count_rewardees);
 		}
 
 
@@ -47,22 +53,24 @@ namespace Massive.Tests.MySql
 		/// There's some non-trivial work behind the scenes in Massive.MySql.cs to make the two 
 		/// providers return a bool when we expect them to.
 		/// </remarks>
-		[Test]
-		public void Function_Call_Bool()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Function_Call_Bool(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			var result = db.ExecuteAsProcedure("inventory_in_stock",
 											   inParams: new { p_inventory_id = 5 },
 											   returnParams: new { retval = false });
-			Assert.AreEqual(true, result.retval);
+			Assert.Equal(true, result.retval);
 		}
 
 
 		/// <remarks>
 		/// Devart doesn't have an unsigned byte type, so has to put 0-255 into a short
 		/// </remarks>
-		[Test]
-		public void Function_Call_Byte()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Function_Call_Byte(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			var result = db.ExecuteAsProcedure("inventory_in_stock",
@@ -70,13 +78,13 @@ namespace Massive.Tests.MySql
 											   returnParams: new { retval = (byte)1 });
 			if(ProviderName == "Devart.Data.MySql")
 			{
-				Assert.AreEqual(typeof(short), result.retval.GetType());
+				Assert.Equal(typeof(short), result.retval.GetType());
 			}
 			else
 			{
-				Assert.AreEqual(typeof(byte), result.retval.GetType());
+				Assert.Equal(typeof(byte), result.retval.GetType());
 			}
-			Assert.AreEqual(1, result.retval);
+			Assert.Equal(1, result.retval);
 		}
 
 
@@ -84,15 +92,16 @@ namespace Massive.Tests.MySql
 		/// Again there's some non-trivial work behind the scenes in Massive.MySql.cs to make both 
 		/// providers return a signed byte when we expect them to.
 		/// </remarks>
-		[Test]
-		public void Function_Call_SByte()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Function_Call_SByte(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			var result = db.ExecuteAsProcedure("inventory_in_stock",
 											   inParams: new { p_inventory_id = 5 },
 											   returnParams: new { retval = (sbyte)1 });
-			Assert.AreEqual(typeof(sbyte), result.retval.GetType());
-			Assert.AreEqual(1, result.retval);
+			Assert.Equal(typeof(sbyte), result.retval.GetType());
+			Assert.Equal(1, result.retval);
 		}
 
 
@@ -102,8 +111,9 @@ namespace Massive.Tests.MySql
 		/// Because of yield return execution, results are definitely not available until at least one item has been read back.
 		/// Becasue of the ADO.NET driver, results may not be available until all of the values have been read back (REF).
 		/// </summary>
-		[Test]
-		public void Procedure_Call_Query_Plus_Results()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Procedure_Call_Query_Plus_Results(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 
@@ -127,51 +137,55 @@ namespace Massive.Tests.MySql
 			foreach(var item in resultset)
 			{
 				count++;
-				Assert.AreEqual(typeof(string), item.last_name.GetType());
-				Assert.AreEqual(typeof(DateTime), item.create_date.GetType());
+				Assert.Equal(typeof(string), item.last_name.GetType());
+				Assert.Equal(typeof(DateTime), item.create_date.GetType());
 			}
 
-			var results = command.ResultsAsExpando();
+			var results = db.ResultsAsExpando(command);
 
-			Assert.Greater(results.count_rewardees, 0);
-			Assert.AreEqual(count, results.count_rewardees);
+			Assert.Equal(true, results.count_rewardees > 0);
+			Assert.Equal(count, results.count_rewardees);
 		}
 
 
 		// Massive style calls to some examples from https://www.devart.com/dotconnect/mysql/docs/Parameters.html#inoutparams
 		#region Devart Examples
-		[Test]
-		public void In_Out_Params_SQL()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void In_Out_Params_SQL(string ProviderName)
 		{
 			var _providerName = ProviderName;
 			if(ProviderName == "MySql.Data.MySqlClient")
 			{
-				_providerName += ", AllowUserVariables=true";
+				// this must be added to access user variables on the Oracle/MySQL driver
+				_providerName += ";AllowUserVariables=true";
 			}
 			var db = new SPTestsDatabase(_providerName);
 			// old skool SQL
 			// this approach only works on the Oracle/MySQL driver if "AllowUserVariables=true" is included in the connection string
 			var result = db.Scalar("CALL testproc_in_out(10, @param2); SELECT @param2");
-			Assert.AreEqual(20, result);
+			Assert.Equal((long)20, result);
 		}
 
 
-		[Test]
-		public void In_Out_Params_SP()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void In_Out_Params_SP(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			// new skool
 			var result = db.ExecuteAsProcedure("testproc_in_out", inParams: new { param1 = 10 }, outParams: new { param2 = 0 });
-			Assert.AreEqual(20, result.param2);
+			Assert.Equal(20, result.param2);
 		}
 
 
-		[Test]
-		public void InOut_Param_SP()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void InOut_Param_SP(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			var result = db.ExecuteAsProcedure("testproc_inout", ioParams: new { param1 = 10 });
-			Assert.AreEqual(20, result.param1);
+			Assert.Equal(20, result.param1);
 		}
 		#endregion
 	}

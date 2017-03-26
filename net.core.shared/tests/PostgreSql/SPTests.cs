@@ -4,10 +4,14 @@ using System.Dynamic;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+#if !COREFX
 using System.Transactions;
+#endif
 using Massive.Tests.PostgreSql.TableClasses;
-using NUnit.Framework;
+using Xunit;
+#if !COREFX
 using SD.Tools.OrmProfiler.Interceptor;
+#endif
 
 namespace Massive.Tests.PostgreSql
 {
@@ -18,16 +22,25 @@ namespace Massive.Tests.PostgreSql
 	/// Runs against functions and procedures which are created by running SPTests.sql script on the test database.
 	/// These objects do not conflict with anything in the Northwind database, and can be added there.
 	/// </remarks>
-	[TestFixture]
-	public class SPTests
+	public class SPTests : IDisposable
 	{
-		[SetUp]
-		public void Setup()
+		private readonly string OrmProfilerApplicationName = "Massive Postgresql stored procedure, function and cursor tests";
+
+		public SPTests()
 		{
-			InterceptorCore.Initialize("Massive PostgrSQL procedure, function & cursor tests");
+			Console.WriteLine("Entering " + OrmProfilerApplicationName);
+#if !COREFX
+			InterceptorCore.Initialize(OrmProfilerApplicationName);
+#endif
 		}
 
-		[Test]
+		public void Dispose()
+		{
+			Console.WriteLine("Exiting " + OrmProfilerApplicationName);
+		}
+
+
+		[Fact]
 		public void InitialNullIntegerOutputParam()
 		{
 			var db = new SPTestsDatabase();
@@ -35,21 +48,21 @@ namespace Massive.Tests.PostgreSql
 			dynamic z = new ExpandoObject();
 			z.z = null;
 			dynamic procResult = db.ExecuteAsProcedure("find_min", inParams: new { x = 5, y = 3 }, outParams: z);
-			Assert.AreEqual(typeof(int), procResult.z.GetType());
-			Assert.AreEqual(3, procResult.z);
+			Assert.Equal(typeof(int), procResult.z.GetType());
+			Assert.Equal(3, procResult.z);
 		}
 
-		[Test]
+		[Fact]
 		public void IntegerReturnParam()
 		{
 			var db = new SPTestsDatabase();
 			// NB Massive is converting all Postgres return params to output params because Npgsql treats all function
 			// output and return as output (which is because PostgreSQL itself treats them as the same, really).
 			dynamic fnResult = db.ExecuteAsProcedure("find_max", inParams: new { x = 6, y = 7 }, returnParams: new { returnValue = true });
-			Assert.AreEqual(7, fnResult.returnValue);
+			Assert.Equal(7, fnResult.returnValue);
 		}
 
-		[Test]
+		[Fact]
 		public void PostgresAnonymousParametersA()
 		{
 			var db = new SPTestsDatabase();
@@ -57,35 +70,35 @@ namespace Massive.Tests.PostgreSql
 			// how it is treated when it appears in args in the standard Massive API, to provide support for this. (Note, object[]
 			// makes no sense in the context of named parameters otherwise, and will throw an exception on the other DBs.)
 			dynamic fnResultAnon = db.ExecuteAsProcedure("find_max", inParams: new object[] { 12, 7 }, returnParams: new { returnValue = 0 });
-			Assert.AreEqual(12, fnResultAnon.returnValue);
+			Assert.Equal(12, fnResultAnon.returnValue);
 		}
 
-		[Test]
+		[Fact]
 		public void PostgresAnonymousParametersB()
 		{
 			var db = new SPTestsDatabase();
 			// NB This function can't be called except with anonymous parameters.
 			// (I believe you can't even do it with a SQL block, because Postgres anonymous SQL blocks do not accept parameters? May be wrong...)
 			dynamic addResult = db.ExecuteAsProcedure("add_em", inParams: new object[] { 4, 2 }, returnParams: new { RETURN = 0 });
-			Assert.AreEqual(6, addResult.RETURN);
+			Assert.Equal(6, addResult.RETURN);
 		}
 
-		[Test]
+		[Fact]
 		public void InputOutputParam()
 		{
 			var db = new SPTestsDatabase();
 			dynamic squareResult = db.ExecuteAsProcedure("square_num", ioParams: new { x = 4 });
-			Assert.AreEqual(16, squareResult.x);
+			Assert.Equal(16, squareResult.x);
 		}
 
-		[Test]
+		[Fact]
 		public void InitialNullInputOutputParam()
 		{
 			var db = new SPTestsDatabase();
 			dynamic xParam = new ExpandoObject();
 			xParam.x = null;
 			dynamic squareResult = db.ExecuteAsProcedure("square_num", ioParams: xParam);
-			Assert.AreEqual(null, squareResult.x);
+			Assert.Equal(null, squareResult.x);
 		}
 
 		public class dateNullParam
@@ -93,16 +106,16 @@ namespace Massive.Tests.PostgreSql
 			public DateTime? d { get; set; }
 		}
 
-		[Test]
+		[Fact]
 		public void InitialNullDateReturnParamMethod1()
 		{
 			var db = new SPTestsDatabase();
 			// This method will work on any provider
 			dynamic dateResult = db.ExecuteAsProcedure("get_date", returnParams: new dateNullParam());
-			Assert.AreEqual(typeof(DateTime), dateResult.d.GetType());
+			Assert.Equal(typeof(DateTime), dateResult.d.GetType());
 		}
 
-		[Test]
+		[Fact]
 		public void InitialNullDateReturnParamMethod2()
 		{
 			var db = new SPTestsDatabase();
@@ -110,10 +123,10 @@ namespace Massive.Tests.PostgreSql
 			dynamic dParam = new ExpandoObject();
 			dParam.d = null;
 			dynamic dateResult = db.ExecuteAsProcedure("get_date", returnParams: dParam);
-			Assert.AreEqual(typeof(DateTime), dateResult.d.GetType());
+			Assert.Equal(typeof(DateTime), dateResult.d.GetType());
 		}
 
-		[Test]
+		[Fact]
 		public void InitialNullDateReturnParamMethod3()
 		{
 			var db = new SPTestsDatabase();
@@ -122,10 +135,10 @@ namespace Massive.Tests.PostgreSql
 			dynamic dParam = new ExpandoObject();
 			dParam.d = false;
 			dynamic dateResult = db.ExecuteAsProcedure("get_date", returnParams: dParam);
-			Assert.AreEqual(typeof(DateTime), dateResult.d.GetType());
+			Assert.Equal(typeof(DateTime), dateResult.d.GetType());
 		}
 
-		[Test]
+		[Fact]
 		public void DefaultValueFromNullInputOutputParam_Npgsql()
 		{
 			var db = new SPTestsDatabase();
@@ -134,9 +147,9 @@ namespace Massive.Tests.PostgreSql
 			wArgs.w = null;
 			// w := w + 2; v := w - 1; x := w + 1
 			dynamic testResult = db.ExecuteAsProcedure("test_vars", ioParams: wArgs, outParams: new { v = 0, x = 0 });
-			Assert.AreEqual(1, testResult.v);
-			Assert.AreEqual(2, testResult.w);
-			Assert.AreEqual(3, testResult.x);
+			Assert.Equal(1, testResult.v);
+			Assert.Equal(2, testResult.w);
+			Assert.Equal(3, testResult.x);
 		}
 
 		public class wArgs
@@ -144,41 +157,41 @@ namespace Massive.Tests.PostgreSql
 			public int? w { get; set; }
 		}
 
-		[Test]
+		[Fact]
 		public void DefaultValueFromNullInputOutputParam_CrossDb()
 		{
 			// This is the cross-DB compatible way to do it.
 			var db = new SPTestsDatabase();
 			// w := w + 2; v := w - 1; x := w + 1
 			dynamic testResult = db.ExecuteAsProcedure("test_vars", ioParams: new wArgs(), outParams: new { v = 0, x = 0 });
-			Assert.AreEqual(1, testResult.v);
-			Assert.AreEqual(2, testResult.w);
-			Assert.AreEqual(3, testResult.x);
+			Assert.Equal(1, testResult.v);
+			Assert.Equal(2, testResult.w);
+			Assert.Equal(3, testResult.x);
 		}
 
-		[Test]
+		[Fact]
 		public void ProvideValueToInputOutputParam()
 		{
 			var db = new SPTestsDatabase();
 			// w := w + 2; v := w - 1; x := w + 1
 			dynamic testResult = db.ExecuteAsProcedure("test_vars", ioParams: new { w = 2 }, outParams: new { v = 0, x = 0 });
-			Assert.AreEqual(3, testResult.v);
-			Assert.AreEqual(4, testResult.w);
-			Assert.AreEqual(5, testResult.x);
+			Assert.Equal(3, testResult.v);
+			Assert.Equal(4, testResult.w);
+			Assert.Equal(5, testResult.x);
 		}
 
-		[Test]
+		[Fact]
 		public void ReadOutputParamsUsingQuery()
 		{
 			var db = new SPTestsDatabase();
 			// Again this is Postgres specific: output params are really part of data row and can be read that way
 			var record = db.QueryFromProcedure("test_vars", new { w = 2 }).FirstOrDefault();
-			Assert.AreEqual(3, record.v);
-			Assert.AreEqual(4, record.w);
-			Assert.AreEqual(5, record.x);
+			Assert.Equal(3, record.v);
+			Assert.Equal(4, record.w);
+			Assert.Equal(5, record.x);
 		}
 
-		[Test]
+		[Fact]
 		public void QuerySetOfRecordsFromFunction()
 		{
 			var db = new SPTestsDatabase();
@@ -189,11 +202,11 @@ namespace Massive.Tests.PostgreSql
 				Console.WriteLine(innerRecord.sum + "\t|\t" + innerRecord.product);
 				count++;
 			}
-			Assert.AreEqual(4, count);
+			Assert.Equal(4, count);
 		}
 
-		#region Dereferencing tests
-		[Test]
+#region Dereferencing tests
+		[Fact]
 		public void DereferenceCursorOutputParameter()
 		{
 			var db = new SPTestsDatabase();
@@ -206,10 +219,12 @@ namespace Massive.Tests.PostgreSql
 				Console.WriteLine(employee.firstname + " " + employee.lastname);
 				count++;
 			}
-			Assert.AreEqual(9, count);
+			Assert.Equal(9, count);
 		}
 
-		[Test]
+
+#if !COREFX
+		[Fact]
 		public void DereferenceFromQuery_ManualWrapping()
 		{
 			var db = new SPTestsDatabase();
@@ -227,10 +242,11 @@ namespace Massive.Tests.PostgreSql
 				}
 				scope.Complete();
 			}
-			Assert.AreEqual(9, count);
+			Assert.Equal(9, count);
 		}
+#endif
 
-		[Test]
+		[Fact]
 		public void DereferenceFromQuery_AutoWrapping()
 		{
 			var db = new SPTestsDatabase();
@@ -242,7 +258,7 @@ namespace Massive.Tests.PostgreSql
 				Console.WriteLine(employee.firstname + " " + employee.lastname);
 				count++;
 			}
-			Assert.AreEqual(9, count);
+			Assert.Equal(9, count);
 		}
 
 		// Test various dereferencing patters (more relevant since we are coding this ourselves)
@@ -255,19 +271,19 @@ namespace Massive.Tests.PostgreSql
 				foreach(var item in set)
 				{
 					counts[sets]++;
-					if (idTest) Assert.AreEqual(typeof(int), item.id.GetType());
-					else if (sets == 0) Assert.AreEqual(typeof(int), item.a.GetType());
-					else Assert.AreEqual(typeof(int), item.c.GetType());
+					if (idTest) Assert.Equal(typeof(int), item.id.GetType());
+					else if (sets == 0) Assert.Equal(typeof(int), item.a.GetType());
+					else Assert.Equal(typeof(int), item.c.GetType());
 					if(breakTest) break;
 				}
 				sets++;
 			}
-			Assert.AreEqual(2, sets);
-			Assert.AreEqual(breakTest ? 1 : count0, counts[0]);
-			Assert.AreEqual(breakTest ? 1 : count1, counts[1]);
+			Assert.Equal(2, sets);
+			Assert.Equal(breakTest ? 1 : count0, counts[0]);
+			Assert.Equal(breakTest ? 1 : count1, counts[1]);
 		}
 
-		[Test]
+		[Fact]
 		public void DereferenceOneByNFromProcedure()
 		{
 			var db = new SPTestsDatabase();
@@ -275,7 +291,7 @@ namespace Massive.Tests.PostgreSql
 			CheckMultiResultSetStructure(resultSetOneByN);
 		}
 
-		[Test]
+		[Fact]
 		public void DereferenceNByOneFromProcedure()
 		{
 			var db = new SPTestsDatabase();
@@ -285,7 +301,7 @@ namespace Massive.Tests.PostgreSql
 			CheckMultiResultSetStructure(resultSetNByOne);
 		}
 
-		[Test]
+		[Fact]
 		public void DereferenceOneByNFromQuery()
 		{
 			var db = new SPTestsDatabase();
@@ -294,7 +310,7 @@ namespace Massive.Tests.PostgreSql
 			CheckMultiResultSetStructure(resultSetOneByNSQL);
 		}
 
-		[Test]
+		[Fact]
 		public void DereferenceNByOneFromQuery()
 		{
 			var db = new SPTestsDatabase();
@@ -303,7 +319,7 @@ namespace Massive.Tests.PostgreSql
 			CheckMultiResultSetStructure(resultSetNByOneSQL);
 		}
 
-		[Test]
+		[Fact]
 		public void QueryMultipleWithBreaks()
 		{
 			var db = new SPTestsDatabase();
@@ -312,29 +328,29 @@ namespace Massive.Tests.PostgreSql
 			var resultCTestToBreak = db.QueryMultipleFromProcedure("cbreaktest", ioParams: new { c1 = new Cursor(), c2 = new Cursor() });
 			CheckMultiResultSetStructure(resultCTestToBreak, breakTest: true);
 		}
-		#endregion
+#endregion
 
-		[Test]
+		[Fact]
 		public void QueryFromMixedCursorOutput()
 		{
 			var db = new SPTestsDatabase();
 			// Following the Oracle pattern this WILL dereference; so we need some more interesting result sets in there now.
 			var firstItemCursorMix = db.QueryFromProcedure("cursor_mix", outParams: new { anyname = new Cursor(), othername = 0 }).FirstOrDefault();
-			Assert.AreEqual(11, firstItemCursorMix.a);
-			Assert.AreEqual(22, firstItemCursorMix.b);
+			Assert.Equal(11, firstItemCursorMix.a);
+			Assert.Equal(22, firstItemCursorMix.b);
 		}
 
-		[Test]
+		[Fact]
 		public void NonQueryFromMixedCursorOutput()
 		{
 			var db = new SPTestsDatabase();
 			// Following the Oracle pattern this will not dereference: we get a variable value and a cursor ref.
 			var itemCursorMix = db.ExecuteAsProcedure("cursor_mix", outParams: new { anyname = new Cursor(), othername = 0 });
-			Assert.AreEqual(42, itemCursorMix.othername);
-			Assert.AreEqual(typeof(string), itemCursorMix.anyname.GetType()); // NB PostgreSql ref cursors return as string
+			Assert.Equal(42, itemCursorMix.othername);
+			Assert.Equal(typeof(string), itemCursorMix.anyname.GetType()); // NB PostgreSql ref cursors return as string
 		}
 
-		[Test]
+		[Fact]
 		public void InputCursors_BeginTransaction()
 		{
 			var db = new SPTestsDatabase();
@@ -348,26 +364,27 @@ namespace Massive.Tests.PostgreSql
 					int count1 = 0;
 					foreach(var item in cursor1)
 					{
-						Assert.AreEqual(11, item.myint1);
-						Assert.AreEqual(22, item.myint2);
+						Assert.Equal(11, item.myint1);
+						Assert.Equal(22, item.myint2);
 						count1++;
 					}
-					Assert.AreEqual(1, count1);
+					Assert.Equal(1, count1);
 					var cursor2 = db.QueryFromProcedure("fetch_next_ints_from_cursor", new { mycursor = new Cursor(cursors.c2) }, connection: conn);
 					int count2 = 0;
 					foreach(var item in cursor2)
 					{
-						Assert.AreEqual(33, item.myint1);
-						Assert.AreEqual(44, item.myint2);
+						Assert.Equal(33, item.myint1);
+						Assert.Equal(44, item.myint2);
 						count2++;
 					}
-					Assert.AreEqual(1, count2);
+					Assert.Equal(1, count2);
 					trans.Commit();
 				}
 			}
 		}
 
-		[Test]
+#if !COREFX
+		[Fact]
 		public void InputCursors_TransactionScope()
 		{
 			var db = new SPTestsDatabase();
@@ -381,20 +398,20 @@ namespace Massive.Tests.PostgreSql
 				int count1 = 0;
 				foreach(var item in cursor1)
 				{
-					Assert.AreEqual(11, item.myint1);
-					Assert.AreEqual(22, item.myint2);
+					Assert.Equal(11, item.myint1);
+					Assert.Equal(22, item.myint2);
 					count1++;
 				}
-				Assert.AreEqual(1, count1);
+				Assert.Equal(1, count1);
 				var cursor2 = db.QueryFromProcedure("fetch_next_ints_from_cursor", new { mycursor = new Cursor(cursors.c2) });
 				int count2 = 0;
 				foreach(var item in cursor2)
 				{
-					Assert.AreEqual(33, item.myint1);
-					Assert.AreEqual(44, item.myint2);
+					Assert.Equal(33, item.myint1);
+					Assert.Equal(44, item.myint2);
 					count2++;
 				}
-				Assert.AreEqual(1, count2);
+				Assert.Equal(1, count2);
 				scope.Complete();
 			}
 		}
@@ -403,11 +420,11 @@ namespace Massive.Tests.PostgreSql
 		/// For NX1 cursors as above Execute can get the raw cursors.
 		/// For 1XN as here we have to use Query with automatic dereferencing turned off.
 		/// </summary>
-		[Test]
+		[Fact]
 		public void InputCursors_1XN()
 		{
 			var db = new SPTestsDatabase();
-			db.AutoDereferenceCursors = false; // for this instance only
+			db.NpgsqlAutoDereferenceCursors = false; // for this instance only
 
 			// cursors in PostgreSQL must share a transaction (not just a connection, as in Oracle)
 			// to use TransactionScope with Npgsql, the connection string must include "Enlist=true;"
@@ -422,35 +439,36 @@ namespace Massive.Tests.PostgreSql
 				{
 					cursor[i++] = item.cursoronebyn;
 				}
-				Assert.AreEqual(2, i);
+				Assert.Equal(2, i);
 				var cursor1 = db.QueryFromProcedure("fetch_next_ints_from_cursor", new { mycursor = new Cursor(cursor[0]) });
 				int count1 = 0;
 				foreach(var item in cursor1)
 				{
-					Assert.AreEqual(1, item.myint1);
-					Assert.AreEqual(2, item.myint2);
+					Assert.Equal(1, item.myint1);
+					Assert.Equal(2, item.myint2);
 					count1++;
 				}
-				Assert.AreEqual(1, count1);
+				Assert.Equal(1, count1);
 				var cursor2 = db.QueryFromProcedure("fetch_next_ints_from_cursor", new { mycursor = new Cursor(cursor[1]) });
 				int count2 = 0;
 				foreach(var item in cursor2)
 				{
-					Assert.AreEqual(3, item.myint1);
-					Assert.AreEqual(4, item.myint2);
+					Assert.Equal(3, item.myint1);
+					Assert.Equal(4, item.myint2);
 					count2++;
 				}
-				Assert.AreEqual(1, count2);
+				Assert.Equal(1, count2);
 				scope.Complete();
 			}
 		}
+#endif
 
 		readonly int LargeCursorSize = 1000000;
 
 		/// <summary>
 		/// Explicit dereferencing is more fiddly to do, but you still have the choice to do it (even when automatic dereferencing is on).
 		/// </summary>
-		[Test]
+		[Fact]
 		public void LargeCursor_ExplicitFetch()
 		{
 			int FetchSize = 20000;
@@ -471,7 +489,8 @@ namespace Massive.Tests.PostgreSql
 						{
 							count++;
 							subcount++;
-							Assert.AreEqual(count, item.id);
+							// there is no ORDER BY (it would not be sensible on such a huge data set) - this only sometimes works...
+							//Assert.Equal(count, item.id);
 						}
 						if(subcount == 0)
 						{
@@ -483,8 +502,8 @@ namespace Massive.Tests.PostgreSql
 					trans.Commit();
 				}
 			}
-			Assert.AreEqual((LargeCursorSize + FetchSize - 1) / FetchSize, batchCount);
-			Assert.AreEqual(LargeCursorSize, count);
+			Assert.Equal((LargeCursorSize + FetchSize - 1) / FetchSize, batchCount);
+			Assert.Equal(LargeCursorSize, count);
 		}
 
 		/// <remarks>
@@ -493,7 +512,7 @@ namespace Massive.Tests.PostgreSql
 		/// 	db.AutoDereferenceCursors = true;
 		/// 	db.AutoDereferenceFetchSize = 10000;
 		/// </remarks>
-		[Test]
+		[Fact]
 		public void LargeCursor_AutomaticDereferencing()
 		{
 			var db = new SPTestsDatabase();
@@ -505,12 +524,13 @@ namespace Massive.Tests.PostgreSql
 			foreach(var item in fetchTest)
 			{
 				count++;
-				Assert.AreEqual(count, item.id);
+				// there is no ORDER BY (it would not be sensible on such a huge data set) - this only sometimes works...
+				//Assert.Equal(count, item.id);
 			}
-			Assert.AreEqual(LargeCursorSize, count);
+			Assert.Equal(LargeCursorSize, count);
 		}
 
-		[Test]
+		[Fact]
 		public void LargeCursorX2_AutomaticDereferencing()
 		{
 			var db = new SPTestsDatabase();
@@ -526,15 +546,16 @@ namespace Massive.Tests.PostgreSql
 				foreach(var item in result)
 				{
 					count++;
-					Assert.AreEqual(count, item.id);
+					// there is no ORDER BY (it would not be sensible on such a huge data set) - this only sometimes works...
+					//Assert.Equal(count, item.id);
 				}
-				Assert.AreEqual(LargeCursorSize, count);
+				Assert.Equal(LargeCursorSize, count);
 			}
-			Assert.AreEqual(2, rcount);
+			Assert.Equal(2, rcount);
 		}
 
 #if false
-		[Test]
+		[Fact]
 		public void HugeCursorTest()
 		{
 			var db = new SPTestsDatabase();
@@ -590,11 +611,6 @@ namespace Massive.Tests.PostgreSql
 			// AFAIK these will never work (you can't assign to vars in SQL block)
 			//dynamic intResult = db.Execute(":a := 1", inParams: new aArgs());
 			//dynamic dateResult = db.Execute("begin :d := SYSDATE; end;", outParams: new myParamsD());
-		}
-
-		[TearDown]
-		public void CleanUp()
-		{
 		}
 	}
 }

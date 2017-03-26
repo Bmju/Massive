@@ -1,11 +1,14 @@
-﻿using System;
+﻿#if !COREFX
+using System;
 using System.Data;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Massive.Tests.Oracle.TableClasses;
-using NUnit.Framework;
+using Xunit;
+#if !COREFX
 using SD.Tools.OrmProfiler.Interceptor;
+#endif
 
 namespace Massive.Tests.Oracle
 {
@@ -16,105 +19,127 @@ namespace Massive.Tests.Oracle
 	/// Runs against functions and procedures which are created by running SPTests.sql script on the test database.
 	/// These objects do not conflict with anything in the SCOTT database, and can be added there.
 	/// </remarks>
-	[TestFixture("Oracle.ManagedDataAccess.Client")]
-	[TestFixture("Oracle.DataAccess.Client")]
-	public class SPTests
+	public class SPTests : IDisposable
 	{
-		private string ProviderName;
+		private readonly string OrmProfilerApplicationName = "Massive Oracle stored procedure, function and cursor tests";
 
-		/// <summary>
-		/// Initialise tests for given provider
-		/// </summary>
-		/// <param name="providerName">Provider name</param>
-		public SPTests(string providerName)
+		public SPTests()
 		{
-			ProviderName = providerName;
+			Console.WriteLine("Entering " + OrmProfilerApplicationName);
+#if !COREFX
+			InterceptorCore.Initialize(OrmProfilerApplicationName);
+#endif
 		}
 
-		[SetUp]
-		public void Setup()
+		public void Dispose()
 		{
-			InterceptorCore.Initialize("Massive Oracle procedure, function & cursor tests");
+			Console.WriteLine("Exiting " + OrmProfilerApplicationName);
 		}
 
-		[Test]
-		public void NormalWhereCall()
+
+		public static IEnumerable<object[]> ProviderNames = new[] {
+			new object[] { "Oracle.ManagedDataAccess.Client" },
+			new object[] { "Oracle.DataAccess.Client" }
+		};
+
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void NormalWhereCall(string ProviderName)
 		{
 			// Check that things are up and running normally before trying the new stuff
 			var db = new Department(ProviderName);
 			var rows = db.All(where: "LOC = :0", args: "Nowhere");
-			Assert.AreEqual(9, rows.ToList().Count);
+			Assert.Equal(9, rows.ToList().Count);
 		}
 
-		[Test]
-		public void IntegerOutputParam()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void IntegerOutputParam(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			dynamic intResult = db.ExecuteWithParams("begin :a := 1; end;", outParams: new { a = 0 });
-			Assert.AreEqual(1, intResult.a);
+			Assert.Equal(1, intResult.a);
 		}
+
 
 		public class dateNullParam
 		{
 			public DateTime? d { get; set; }
 		}
 
-		[Test]
-		public void InitialNullDateOutputParam()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void InitialNullDateOutputParam(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			dynamic dateResult = db.ExecuteWithParams("begin :d := SYSDATE; end;", outParams: new dateNullParam());
-			Assert.AreEqual(typeof(DateTime), dateResult.d.GetType());
+			Assert.Equal(typeof(DateTime), dateResult.d.GetType());
 		}
 
-		[Test]
-		public void InputAndOutputParams()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void InputAndOutputParams(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			dynamic procResult = db.ExecuteAsProcedure("findMin", inParams: new { x = 1, y = 3 }, outParams: new { z = 0 });
-			Assert.AreEqual(1, procResult.z);
+			Assert.Equal(1, procResult.z);
 		}
 
-		[Test]
-		public void InputAndReturnParams()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void InputAndReturnParams(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			dynamic fnResult = db.ExecuteAsProcedure("findMax", inParams: new { x = 1, y = 3 }, returnParams: new { returnValue = 0 });
-			Assert.AreEqual(3, fnResult.returnValue);
+			Assert.Equal(3, fnResult.returnValue);
 		}
+
 
 		public class intNullParam
 		{
 			public int? x { get; set; }
 		}
 
-		[Test]
-		public void InputOutputParam()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void InputOutputParam(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			dynamic squareResult = db.ExecuteAsProcedure("squareNum", ioParams: new { x = 4 });
-			Assert.AreEqual(16, squareResult.x);
+			Assert.Equal(16, squareResult.x);
 		}
 
-		[Test]
-		public void InitialNullInputOutputParam()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void InitialNullInputOutputParam(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			dynamic squareResult = db.ExecuteAsProcedure("squareNum", ioParams: new intNullParam());
-			Assert.AreEqual(null, squareResult.x);
+			Assert.Equal(null, squareResult.x);
 		}
 
-		[Test]
-		public void SingleRowFromTableValuedFunction()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void SingleRowFromTableValuedFunction(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			var record = db.QueryWithParams("SELECT * FROM table(GET_EMP(:p_EMPNO))", new { p_EMPNO = 7782 }).FirstOrDefault();
-			Assert.AreEqual(7782, record.EMPNO);
-			Assert.AreEqual("CLARK", record.ENAME);
+			Assert.Equal(7782, record.EMPNO);
+			Assert.Equal("CLARK", record.ENAME);
 		}
 
-		[Test]
-		public void DereferenceCursorValuedFunction()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void DereferenceCursorValuedFunction(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			// Oracle function one cursor return value
@@ -125,11 +150,13 @@ namespace Massive.Tests.Oracle
 				Console.WriteLine(employee.EMPNO + " " + employee.ENAME);
 				count++;
 			}
-			Assert.AreEqual(3, count);
+			Assert.Equal(3, count);
 		}
 
-		[Test]
-		public void DereferenceCursorOutputParameter()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void DereferenceCursorOutputParameter(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			// Oracle procedure one cursor output variables
@@ -140,11 +167,13 @@ namespace Massive.Tests.Oracle
 				Console.WriteLine(employee.EMPNO + " " + employee.ENAME);
 				count++;
 			}
-			Assert.AreEqual(14, count);
+			Assert.Equal(14, count);
 		}
 
-		[Test]
-		public void QueryMultipleFromTwoOutputCursors()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void QueryMultipleFromTwoOutputCursors(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			// Oracle procedure two cursor output variables
@@ -156,27 +185,31 @@ namespace Massive.Tests.Oracle
 				foreach(var item in set)
 				{
 					counts[sets]++;
-					if(sets == 0) Assert.AreEqual(typeof(string), item.ENAME.GetType());
-					else Assert.AreEqual(typeof(string), item.DNAME.GetType());
+					if(sets == 0) Assert.Equal(typeof(string), item.ENAME.GetType());
+					else Assert.Equal(typeof(string), item.DNAME.GetType());
 				}
 				sets++;
 			}
-			Assert.AreEqual(2, sets);
-			Assert.AreEqual(14, counts[0]);
-			Assert.AreEqual(60, counts[1]);
+			Assert.Equal(2, sets);
+			Assert.Equal(14, counts[0]);
+			Assert.Equal(60, counts[1]);
 		}
 
-		[Test]
-		public void NonQueryWithTwoOutputCursors()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void NonQueryWithTwoOutputCursors(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			var twoSetDirect = db.ExecuteAsProcedure("tworesults", outParams: new { prc1 = new Cursor(), prc2 = new Cursor() });
-			Assert.AreEqual("OracleRefCursor", twoSetDirect.prc1.GetType().Name);
-			Assert.AreEqual("OracleRefCursor", twoSetDirect.prc2.GetType().Name);
+			Assert.Equal("OracleRefCursor", twoSetDirect.prc1.GetType().Name);
+			Assert.Equal("OracleRefCursor", twoSetDirect.prc2.GetType().Name);
 		}
 
-		[Test]
-		public void QueryFromMixedCursorOutput()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void QueryFromMixedCursorOutput(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			var mixedSets = db.QueryMultipleFromProcedure("mixedresults", outParams: new { prc1 = new Cursor(), prc2 = new Cursor(), num1 = 0, num2 = 0 });
@@ -187,45 +220,45 @@ namespace Massive.Tests.Oracle
 				foreach(var item in set)
 				{
 					counts[sets]++;
-					if(sets == 0) Assert.AreEqual(typeof(string), item.ENAME.GetType());
-					else Assert.AreEqual(typeof(string), item.DNAME.GetType());
+					if(sets == 0) Assert.Equal(typeof(string), item.ENAME.GetType());
+					else Assert.Equal(typeof(string), item.DNAME.GetType());
 				}
 				sets++;
 			}
-			Assert.AreEqual(2, sets);
-			Assert.AreEqual(14, counts[0]);
-			Assert.AreEqual(60, counts[1]);
+			Assert.Equal(2, sets);
+			Assert.Equal(14, counts[0]);
+			Assert.Equal(60, counts[1]);
 		}
 
-		[Test]
-		public void NonQueryFromMixedCursorOutput()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void NonQueryFromMixedCursorOutput(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			var mixedDirect = db.ExecuteAsProcedure("mixedresults", outParams: new { prc1 = new Cursor(), prc2 = new Cursor(), num1 = 0, num2 = 0 });
-			Assert.AreEqual("OracleRefCursor", mixedDirect.prc1.GetType().Name);
-			Assert.AreEqual("OracleRefCursor", mixedDirect.prc2.GetType().Name);
-			Assert.AreEqual(1, mixedDirect.num1);
-			Assert.AreEqual(2, mixedDirect.num2);
+			Assert.Equal("OracleRefCursor", mixedDirect.prc1.GetType().Name);
+			Assert.Equal("OracleRefCursor", mixedDirect.prc2.GetType().Name);
+			Assert.Equal(1, mixedDirect.num1);
+			Assert.Equal(2, mixedDirect.num2);
 		}
 
-		[Test]
-		public void PassingCursorInputParameter()
+
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void PassingCursorInputParameter(string ProviderName)
 		{
 			var db = new SPTestsDatabase(ProviderName);
 			// To share cursors between commands in Oracle the commands must use the same connection
 			using(var conn = db.OpenConnection())
 			{
 				var res1 = db.ExecuteWithParams("begin open :p_rc for select* from emp where deptno = 10; end;", outParams: new { p_rc = new Cursor() }, connection: conn);
-				Assert.AreEqual("OracleRefCursor", res1.p_rc.GetType().Name);
+				Assert.Equal("OracleRefCursor", res1.p_rc.GetType().Name);
 				// TO DO: This Oracle test procedure writes some data into a table; we should produce some output (e.g. a row count) instead
 				var res2 = db.ExecuteAsProcedure("cursor_in_out.process_cursor", inParams: new { p_cursor = res1.p_rc }, connection: conn);
-				Assert.AreEqual(0, ((IDictionary<string, object>)res2).Count);
+				Assert.Equal(0, ((IDictionary<string, object>)res2).Count);
 			}
-		}
-
-		[TearDown]
-		public void CleanUp()
-		{
 		}
 	}
 }
+#endif

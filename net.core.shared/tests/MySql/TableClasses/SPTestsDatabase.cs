@@ -8,7 +8,7 @@ namespace Massive.Tests.MySql.TableClasses
 {
 	public class SPTestsDatabase : DynamicModel
 	{
-		public SPTestsDatabase(string providerName) : base(string.Format(TestConstants.ReadTestConnectionStringName, providerName))
+		public SPTestsDatabase(string providerName) : base(string.Format(TestConstants.ReadTestConnection, providerName))
 		{
 		}
 	}

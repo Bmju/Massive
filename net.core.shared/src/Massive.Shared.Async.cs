@@ -1,11 +1,11 @@
 ﻿///////////////////////////////////////////////////////////////////////////////////////////////////
-// Massive v2.0. Async code. 
+// Massive v3.0. Async code. 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Licensed to you under the New BSD License
 // http://www.opensource.org/licenses/bsd-license.php
-// Massive is copyright (c) 2009-2016 various contributors.
+// Massive is copyright (c) 2009-2017 various contributors.
 // All rights reserved.
-// See for sourcecode, full history and contributors list: https://github.com/FransBouma/Massive
+// See for sourcecode, full history and contributors list: https://github.com/MikeBeaton/Massive
 //
 // Redistribution and use in source and binary forms, with or without modification, are permitted 
 // provided that the following conditions are met:
@@ -127,7 +127,6 @@ namespace Massive
 				{
 					toReturn.Add(rdr.RecordToExpando());
 				}
-				rdr.Close();
 			}
 			return toReturn;
 		}
@@ -553,14 +552,14 @@ namespace Massive
 		/// <returns>nothing</returns>
 		private async Task PerformInsertAsync(DbConnection conn, dynamic toInsert, CancellationToken cancellationToken)
 		{
-			if(_sequenceValueCallsBeforeMainInsert && !string.IsNullOrEmpty(_primaryKeyFieldSequence))
+			if(_plugin._sequenceValueCallsBeforeMainInsert && !string.IsNullOrEmpty(_primaryKeyFieldSequence))
 			{
-				var sequenceCmd = CreateCommand(this.GetIdentityRetrievalScalarStatement(), conn);
+				var sequenceCmd = CreateCommand(_plugin.GetIdentityRetrievalScalarStatement(_primaryKeyFieldSequence), conn);
 				((IDictionary<string, object>)toInsert)[this.PrimaryKeyField] = Convert.ToInt32(await sequenceCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false));
 			}
 			DbCommand cmd = CreateInsertCommand(toInsert);
 			cmd.Connection = conn;
-			if(_sequenceValueCallsBeforeMainInsert || string.IsNullOrEmpty(_primaryKeyFieldSequence))
+			if(_plugin._sequenceValueCallsBeforeMainInsert || string.IsNullOrEmpty(_primaryKeyFieldSequence))
 			{
 				await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 			}
@@ -568,7 +567,7 @@ namespace Massive
 			{
 				// simply batch the identity scalar query to the main insert query and execute them as one scalar query. This will both execute the statement and 
 				// return the sequence value
-				cmd.CommandText += ";" + this.GetIdentityRetrievalScalarStatement();
+				cmd.CommandText += ";" + _plugin.GetIdentityRetrievalScalarStatement(_primaryKeyFieldSequence);
 				((IDictionary<string, object>)toInsert)[this.PrimaryKeyField] = Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false));
 			}
 		}
@@ -740,7 +739,7 @@ namespace Massive
 		/// </returns>
 		public async Task<int> CountAsync(CancellationToken cancellationToken, string tableName = "", string where = "", params object[] args)
 		{
-			var scalarQueryPattern = this.GetCountRowQueryPattern();
+			var scalarQueryPattern = _plugin.GetCountRowQueryPattern();
 			scalarQueryPattern += ReadifyWhereClause(where);
 			var toReturn = await ScalarAsync(string.Format(scalarQueryPattern, string.IsNullOrEmpty(tableName) ? this.TableName : tableName), cancellationToken, args).ConfigureAwait(false);
 			return (int)toReturn;
@@ -851,7 +850,7 @@ namespace Massive
 		private async Task<dynamic> BuildPagedResultAsync(CancellationToken cancellationToken, string sql = "", string primaryKeyField = "", string whereClause = "", 
 														  string orderByClause = "", string columns = "*", int pageSize = 20, int currentPage = 1, params object[] args)
 		{
-			var queryPair = this.BuildPagingQueryPair(sql, primaryKeyField, whereClause, orderByClause, columns, pageSize, currentPage);
+			var queryPair = _plugin.BuildPagingQueryPair(sql, primaryKeyField, whereClause, orderByClause, columns, pageSize, currentPage);
 			dynamic result = new ExpandoObject();
 			// first create the tasks, which will make the queries run immediately but also return immediately. As both queries don't have a correlation, this can speed up
 			// things quite a bit. See issue #270

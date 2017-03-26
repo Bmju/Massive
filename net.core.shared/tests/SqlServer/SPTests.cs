@@ -4,11 +4,13 @@ using System.Dynamic;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Massive.Tests.TableClasses;
-using NUnit.Framework;
+using Massive.Tests.SqlServer.TableClasses;
+using Xunit;
+#if !COREFX
 using SD.Tools.OrmProfiler.Interceptor;
+#endif
 
-namespace Massive.Tests
+namespace Massive.Tests.SqlServer
 {
 	/// <summary>
 	/// Suite of tests for stored procedures and functions on SQL Server database.
@@ -16,22 +18,31 @@ namespace Massive.Tests
 	/// <remarks>
 	/// Runs against functions and procedures which are already in the AdventureWorks test database.
 	/// </remarks>
-	[TestFixture]
-	public class SPTests
+	public class SPTests : IDisposable
 	{
-		[SetUp]
-		public void Setup()
+		private readonly string OrmProfilerApplicationName = "Massive SqlServer stored procedure and function tests";
+
+		public SPTests()
 		{
-			InterceptorCore.Initialize("Massive SQL Server stored procedure and function tests");
+			Console.WriteLine("Entering " + OrmProfilerApplicationName);
+#if !COREFX
+			InterceptorCore.Initialize(OrmProfilerApplicationName);
+#endif
 		}
 
-		[Test]
+		public void Dispose()
+		{
+			Console.WriteLine("Exiting " + OrmProfilerApplicationName);
+		}
+
+
+		[Fact]
 		public void NormalSingleCall()
 		{
 			// Check that things are up and running normally before trying the new stuff
 			var soh = new SalesOrderHeader();
 			var item = soh.Single("SalesOrderID=@0", args: 43659);
-			Assert.AreEqual("PO522145787", item.PurchaseOrderNumber);
+			Assert.Equal("PO522145787", item.PurchaseOrderNumber);
 		}
 
 		public class boolNullParam
@@ -39,12 +50,12 @@ namespace Massive.Tests
 			public bool? a { get; set; }
 		}
 
-		[Test]
+		[Fact]
 		public void InitialNullBooleanOutputParam()
 		{
 			var db = new SPTestsDatabase();
 			dynamic boolResult = db.ExecuteWithParams("set @a = 1", outParams: new boolNullParam());
-			Assert.AreEqual(typeof(bool), boolResult.a.GetType());
+			Assert.Equal(typeof(bool), boolResult.a.GetType());
 		}
 
 		public class intNullParam
@@ -52,15 +63,15 @@ namespace Massive.Tests
 			public int? a { get; set; }
 		}
 
-		[Test]
+		[Fact]
 		public void InitialNullIntegerOutputParam()
 		{
 			var db = new SPTestsDatabase();
 			dynamic intResult = db.ExecuteWithParams("set @a = 1", outParams: new intNullParam());
-			Assert.AreEqual(typeof(int), intResult.a.GetType());
+			Assert.Equal(typeof(int), intResult.a.GetType());
 		}
 
-		[Test]
+		[Fact]
 		public void QueryFromStoredProcedure()
 		{
 			var db = new SPTestsDatabase();
@@ -71,29 +82,29 @@ namespace Massive.Tests
 				Console.WriteLine(person.FirstName + " " + person.LastName);
 				count++;
 			}
-			Assert.AreEqual(3, count);
+			Assert.Equal(3, count);
 		}
 
-		[Test]
+		[Fact]
 		public void SingleRowFromTableValuedFunction()
 		{
 			var db = new SPTestsDatabase();
 			// Accessing table value functions on SQL Server (different syntax from Postgres, for example)
 			var person = db.QueryWithParams("SELECT * FROM dbo.ufnGetContactInformation(@PersonID)", new { @PersonID = 35 }).FirstOrDefault();
-			Assert.AreEqual(typeof(string), person.FirstName.GetType());
+			Assert.Equal(typeof(string), person.FirstName.GetType());
 		}
 
-		[Test]
+		[Fact]
 		public void DateReturnParameter()
 		{
 			var db = new SPTestsDatabase();
 			dynamic d = new ExpandoObject();
 			d.d = true; // NB the type is ignored (by the underlying driver)
 			var dResult = db.ExecuteAsProcedure("ufnGetAccountingEndDate", returnParams: d);
-			Assert.AreEqual(typeof(DateTime), dResult.d.GetType());
+			Assert.Equal(typeof(DateTime), dResult.d.GetType());
 		}
 
-		[Test]
+		[Fact]
 		public void QueryMultipleFromTwoResultSets()
 		{
 			var db = new SPTestsDatabase();
@@ -105,14 +116,14 @@ namespace Massive.Tests
 				foreach(var item in set)
 				{
 					counts[sets]++;
-					if(sets == 0) Assert.AreEqual(typeof(int), item.b.GetType());
-					else Assert.AreEqual(typeof(int), item.c.GetType());
+					if(sets == 0) Assert.Equal(typeof(int), item.b.GetType());
+					else Assert.Equal(typeof(int), item.c.GetType());
 				}
 				sets++;
 			}
-			Assert.AreEqual(2, sets);
-			Assert.AreEqual(1, counts[0]);
-			Assert.AreEqual(1, counts[1]);
+			Assert.Equal(2, sets);
+			Assert.Equal(1, counts[0]);
+			Assert.Equal(1, counts[1]);
 		}
 
 		public class wArgs
@@ -120,32 +131,32 @@ namespace Massive.Tests
 			public int? w { get; set; }
 		}
 
-		[Test]
+		[Fact]
 		public void DefaultValueFromNullInputOutputParam()
 		{
 			var db = new SPTestsDatabase();
 			// w := w + 2; v := w - 1; x := w + 1
 			dynamic testResult = db.ExecuteAsProcedure("TestVars", ioParams: new wArgs(), outParams: new { v = 0, x = 0 });
-			Assert.AreEqual(1, testResult.v);
-			Assert.AreEqual(2, testResult.w);
-			Assert.AreEqual(3, testResult.x);
+			Assert.Equal(1, testResult.v);
+			Assert.Equal(2, testResult.w);
+			Assert.Equal(3, testResult.x);
 		}
 
-		[Test]
+		[Fact]
 		public void ProvideValueToInputOutputParam()
 		{
 			var db = new SPTestsDatabase();
 			// w := w + 2; v := w - 1; x := w + 1
 			dynamic testResult = db.ExecuteAsProcedure("TestVars", ioParams: new { w = 2 }, outParams: new { v = 0, x = 0 });
-			Assert.AreEqual(3, testResult.v);
-			Assert.AreEqual(4, testResult.w);
-			Assert.AreEqual(5, testResult.x);
+			Assert.Equal(3, testResult.v);
+			Assert.Equal(4, testResult.w);
+			Assert.Equal(5, testResult.x);
 		}
 
 		/// <remarks>
 		/// See comments on IsCursor() in Massive.SqlServer.cs
 		/// </remarks>
-		[Test]
+		[Fact]
 		public void DereferenceCursor()
 		{
 			// There is probably no situation in which it would make sense to do this (a procedure returning a cursor should be for use by another
@@ -166,11 +177,11 @@ namespace Massive.Tests
 				foreach(var item in results)
 				{
 					count++;
-					Assert.AreEqual(typeof(string), item.CurrencyCode.GetType());
-					Assert.AreEqual(typeof(string), item.Name.GetType());
+					Assert.Equal(typeof(string), item.CurrencyCode.GetType());
+					Assert.Equal(typeof(string), item.Name.GetType());
 				}
 			}
-			Assert.AreEqual(105, count);
+			Assert.Equal(105, count);
 
 			// An example of the correct way to do it
 			dynamic fastResults = db.QueryFromProcedure("uspCurrencySelect");
@@ -178,23 +189,18 @@ namespace Massive.Tests
 			foreach(var item in fastResults)
 			{
 				fastCount++;
-				Assert.AreEqual(typeof(string), item.CurrencyCode.GetType());
-				Assert.AreEqual(typeof(string), item.Name.GetType());
+				Assert.Equal(typeof(string), item.CurrencyCode.GetType());
+				Assert.Equal(typeof(string), item.Name.GetType());
 			}
-			Assert.AreEqual(105, fastCount);
+			Assert.Equal(105, fastCount);
 		}
 
-		[Test]
+		[Fact]
 		public void ScalarFromProcedure()
 		{
 			var db = new SPTestsDatabase();
 			var value = db.ScalarWithParams("uspCurrencySelect", isProcedure: true);
-			Assert.AreEqual("AFA", value);
-		}
-
-		[TearDown]
-		public void CleanUp()
-		{
+			Assert.Equal("AFA", value);
 		}
 	}
 }

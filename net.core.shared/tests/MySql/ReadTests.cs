@@ -7,105 +7,118 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using Massive.Tests.MySql.TableClasses;
-using NUnit.Framework;
+using Xunit;
+#if !COREFX
 using SD.Tools.OrmProfiler.Interceptor;
+#endif
 
 namespace Massive.Tests.MySql
 {
-	[TestFixture("MySql.Data.MySqlClient")]
-	[TestFixture("Devart.Data.MySql")]
-	public class ReadTests
+	public class ReadTests : IDisposable
 	{
-		private string ProviderName;
+		public static IEnumerable<object[]> ProviderNames = new[] {
+			new object[] { "MySql.Data.MySqlClient" }
+#if !COREFX
+		  , new object[] { "Devart.Data.MySql" }
+#endif
+		};
 
-		/// <summary>
-		/// Initialise tests for given provider
-		/// </summary>
-		/// <param name="providerName">Provider name</param>
-		public ReadTests(string providerName)
+		private readonly string OrmProfilerApplicationName = "Massive MySql read tests";
+
+		public ReadTests()
 		{
-			ProviderName = providerName;
+			Console.WriteLine("Entering " + OrmProfilerApplicationName);
+#if !COREFX
+			InterceptorCore.Initialize("Massive MySql read tests");
+#endif
 		}
 
-		[OneTimeSetUp]
-		public void Setup()
+		public void Dispose()
 		{
-			InterceptorCore.Initialize("Massive MySql read tests .NET 4.0");
+			Console.WriteLine("Exiting " + OrmProfilerApplicationName);
 		}
 
 
-		[Test]
-		public void Guid_Arg()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Guid_Arg(string ProviderName)
 		{
 			// MySQL has native Guid parameter support, but the SELECT output is a string
-			var db = new DynamicModel(string.Format(TestConstants.ReadTestConnectionStringName, ProviderName));
+			var db = new DynamicModel(string.Format(TestConstants.ReadTestConnection, ProviderName));
 			var guid = Guid.NewGuid();
 			var command = db.CreateCommand("SELECT @0 AS val", null, guid);
-			Assert.AreEqual(DbType.Guid, command.Parameters[0].DbType);
+			Assert.Equal(DbType.Guid, command.Parameters[0].DbType);
 			var item = db.Query(command).FirstOrDefault();
-			Assert.AreEqual(typeof(string), item.val.GetType());
-			Assert.AreEqual(guid, new Guid(item.val));
+			Assert.Equal(typeof(string), item.val.GetType());
+			Assert.Equal(guid, new Guid(item.val));
 		}
 
 
-		[Test]
-		public void Max_SingleArg()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Max_SingleArg(string ProviderName)
 		{
 			var soh = new Film(ProviderName);
 			var result = ((dynamic)soh).Max(columns: "film_id", where: "rental_duration > @0", args: 6);
-			Assert.AreEqual(988, result);
+			Assert.Equal(988, result);
 		}
 
 
-		[Test]
-		public void Max_TwoArgs()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Max_TwoArgs(string ProviderName)
 		{
 			var soh = new Film(ProviderName);
 			var result = ((dynamic)soh).Max(columns: "film_id", where: "rental_duration > @0 AND rental_duration < @1", args: new object[] { 6, 100 });
-			Assert.AreEqual(988, result);
+			Assert.Equal(988, result);
 		}
 
 
-		[Test]
-		public void Max_NameValuePair()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Max_NameValuePair(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var result = ((dynamic)film).Max(columns: "film_id", rental_duration: 6);
-			Assert.AreEqual(998, result);
+			Assert.Equal(998, result);
 		}
 
 
-		[Test]
-		public void EmptyElement_ProtoType()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void EmptyElement_ProtoType(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			dynamic defaults = film.Prototype;
-			Assert.IsTrue(defaults.last_update > DateTime.MinValue);
+			Assert.True(defaults.last_update > DateTime.MinValue);
 		}
 
 
-		[Test]
-		public void SchemaMetaDataRetrieval()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void SchemaMetaDataRetrieval(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var schema = film.Schema;
-			Assert.IsNotNull(schema);
-			Assert.AreEqual(13, schema.Count());
-			Assert.IsTrue(schema.All(v => v.TABLE_NAME == film.TableNameWithoutSchema));
+			Assert.NotNull(schema);
+			Assert.Equal(13, schema.Count());
+			Assert.True(schema.All(v => v.TABLE_NAME == film.TableNameWithoutSchema));
 		}
 
 
-		[Test]
-		public void All_NoParameters()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void All_NoParameters(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var allRows = film.All().ToList();
-			Assert.AreEqual(1000, allRows.Count);
+			Assert.Equal(1000, allRows.Count);
 		}
 
 
-		[Test]
-		public void All_NoParameters_Streaming()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void All_NoParameters_Streaming(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var allRows = film.All();
@@ -113,292 +126,315 @@ namespace Massive.Tests.MySql
 			foreach(var r in allRows)
 			{
 				count++;
-				Assert.AreEqual(13, ((IDictionary<string, object>)r).Count);        // # of fields fetched should be 13
+				Assert.Equal(13, ((IDictionary<string, object>)r).Count);        // # of fields fetched should be 13
 			}
-			Assert.AreEqual(1000, count);
+			Assert.Equal(1000, count);
 		}
 
 
-		[Test]
-		public void All_LimitSpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void All_LimitSpecification(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var allRows = film.All(limit: 10).ToList();
-			Assert.AreEqual(10, allRows.Count);
+			Assert.Equal(10, allRows.Count);
 		}
 
 
-		[Test]
-		public void All_ColumnSpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void All_ColumnSpecification(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var allRows = film.All(columns: "film_id as FILMID, description, language_id").ToList();
-			Assert.AreEqual(1000, allRows.Count);
+			Assert.Equal(1000, allRows.Count);
 			var firstRow = (IDictionary<string, object>)allRows[0];
-			Assert.AreEqual(3, firstRow.Count);
-			Assert.IsTrue(firstRow.ContainsKey("FILMID"));
-			Assert.IsTrue(firstRow.ContainsKey("description"));
-			Assert.IsTrue(firstRow.ContainsKey("language_id"));
+			Assert.Equal(3, firstRow.Count);
+			Assert.True(firstRow.ContainsKey("FILMID"));
+			Assert.True(firstRow.ContainsKey("description"));
+			Assert.True(firstRow.ContainsKey("language_id"));
 		}
 
 
-		[Test]
-		public void All_OrderBySpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void All_OrderBySpecification(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var allRows = film.All(orderBy: "rental_duration DESC").ToList();
-			Assert.AreEqual(1000, allRows.Count);
+			Assert.Equal(1000, allRows.Count);
 			int previous = int.MaxValue;
 			foreach(var r in allRows)
 			{
 				int current = r.rental_duration;
-				Assert.IsTrue(current <= previous);
+				Assert.True(current <= previous);
 				previous = current;
 			}
 		}
 
 
-		[Test]
-		public void All_WhereSpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void All_WhereSpecification(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var allRows = film.All(where: "WHERE rental_duration=@0", args: 5).ToList();
-			Assert.AreEqual(191, allRows.Count);
+			Assert.Equal(191, allRows.Count);
 		}
 
 
-		[Test]
-		public void All_WhereSpecification_OrderBySpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void All_WhereSpecification_OrderBySpecification(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var allRows = film.All(orderBy: "film_id DESC", where: "WHERE rental_duration=@0", args: 5).ToList();
-			Assert.AreEqual(191, allRows.Count);
+			Assert.Equal(191, allRows.Count);
 			int previous = int.MaxValue;
 			foreach(var r in allRows)
 			{
 				int current = r.film_id;
-				Assert.IsTrue(current <= previous);
+				Assert.True(current <= previous);
 				previous = current;
 			}
 		}
 
 
-		[Test]
-		public void All_WhereSpecification_ColumnsSpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void All_WhereSpecification_ColumnsSpecification(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var allRows = film.All(columns: "film_id as FILMID, description, language_id", where: "WHERE rental_duration=@0", args: 5).ToList();
-			Assert.AreEqual(191, allRows.Count);
+			Assert.Equal(191, allRows.Count);
 			var firstRow = (IDictionary<string, object>)allRows[0];
-			Assert.AreEqual(3, firstRow.Count);
-			Assert.IsTrue(firstRow.ContainsKey("FILMID"));
-			Assert.IsTrue(firstRow.ContainsKey("description"));
-			Assert.IsTrue(firstRow.ContainsKey("language_id"));
+			Assert.Equal(3, firstRow.Count);
+			Assert.True(firstRow.ContainsKey("FILMID"));
+			Assert.True(firstRow.ContainsKey("description"));
+			Assert.True(firstRow.ContainsKey("language_id"));
 		}
 
 
-		[Test]
-		public void All_WhereSpecification_ColumnsSpecification_LimitSpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void All_WhereSpecification_ColumnsSpecification_LimitSpecification(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var allRows = film.All(limit: 2, columns: "film_id as FILMID, description, language_id", where: "WHERE rental_duration=@0", args: 5).ToList();
-			Assert.AreEqual(2, allRows.Count);
+			Assert.Equal(2, allRows.Count);
 			var firstRow = (IDictionary<string, object>)allRows[0];
-			Assert.AreEqual(3, firstRow.Count);
-			Assert.IsTrue(firstRow.ContainsKey("FILMID"));
-			Assert.IsTrue(firstRow.ContainsKey("description"));
-			Assert.IsTrue(firstRow.ContainsKey("language_id"));
+			Assert.Equal(3, firstRow.Count);
+			Assert.True(firstRow.ContainsKey("FILMID"));
+			Assert.True(firstRow.ContainsKey("description"));
+			Assert.True(firstRow.ContainsKey("language_id"));
 		}
 
 
-		[Test]
-		public void All_WhereSpecification_ToDataTable()
+#if !COREFX
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void All_WhereSpecification_ToDataTable(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var allRows = film.All(where: "WHERE rental_duration=@0", args: 5).ToList();
-			Assert.AreEqual(191, allRows.Count);
+			Assert.Equal(191, allRows.Count);
 
 			var allRowsAsDataTable = film.All(where: "WHERE rental_duration=@0", args: 5).ToDataTable();
-			Assert.AreEqual(allRows.Count, allRowsAsDataTable.Rows.Count);
+			Assert.Equal(allRows.Count, allRowsAsDataTable.Rows.Count);
 			for(int i = 0; i < allRows.Count; i++)
 			{
-				Assert.AreEqual(allRows[i].film_id, allRowsAsDataTable.Rows[i]["film_id"]);
-				Assert.AreEqual(5, allRowsAsDataTable.Rows[i]["rental_duration"]);
+				Assert.Equal(allRows[i].film_id, allRowsAsDataTable.Rows[i]["film_id"]);
+				Assert.Equal((byte)5, allRowsAsDataTable.Rows[i]["rental_duration"]);
 			}
 		}
+#endif
 
 
-		[Test]
-		public void Find_AllColumns()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Find_AllColumns(string ProviderName)
 		{
 			dynamic film = new Film(ProviderName);
 			var singleInstance = film.Find(film_id: 43);
-			Assert.AreEqual(43, singleInstance.film_id);
+			Assert.Equal(43, singleInstance.film_id);
 		}
 
 
-		[Test]
-		public void Find_OneColumn()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Find_OneColumn(string ProviderName)
 		{
 			dynamic film = new Film(ProviderName);
 			var singleInstance = film.Find(film_id: 43, columns: "film_id");
-			Assert.AreEqual(43, singleInstance.film_id);
+			Assert.Equal(43, singleInstance.film_id);
 			var siAsDict = (IDictionary<string, object>)singleInstance;
-			Assert.AreEqual(1, siAsDict.Count);
+			Assert.Equal(1, siAsDict.Count);
 		}
 
 
-		[Test]
-		public void Get_AllColumns()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Get_AllColumns(string ProviderName)
 		{
 			dynamic film = new Film(ProviderName);
 			var singleInstance = film.Get(film_id: 43);
-			Assert.AreEqual(43, singleInstance.film_id);
+			Assert.Equal(43, singleInstance.film_id);
 		}
 
 
-		[Test]
-		public void First_AllColumns()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void First_AllColumns(string ProviderName)
 		{
 			dynamic film = new Film(ProviderName);
 			var singleInstance = film.First(film_id: 43);
-			Assert.AreEqual(43, singleInstance.film_id);
+			Assert.Equal(43, singleInstance.film_id);
 		}
 
 
-		[Test]
-		public void Single_AllColumns()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Single_AllColumns(string ProviderName)
 		{
 			dynamic film = new Film(ProviderName);
 			var singleInstance = film.Single(film_id: 43);
-			Assert.AreEqual(43, singleInstance.film_id);
+			Assert.Equal(43, singleInstance.film_id);
 		}
 
 
-		[Test]
-		public void Query_AllRows()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Query_AllRows(string ProviderName)
 		{
-			// I have no idea what Conery was drinking at the time, must have been strong stuff ;) Anyway, 'Query' is only useful
-			// on a direct derived class of DynamicModel without any table specification. 
 			var film = new Film(ProviderName);
 			var allRows = film.Query("SELECT * FROM sakila.film").ToList();
-			Assert.AreEqual(1000, allRows.Count);
+			Assert.Equal(1000, allRows.Count);
 		}
 
 
-		[Test]
-		public void Query_Filter()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Query_Filter(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var filteredRows = film.Query("SELECT * FROM sakila.film WHERE rental_duration=@0", 5).ToList();
-			Assert.AreEqual(191, filteredRows.Count);
+			Assert.Equal(191, filteredRows.Count);
 		}
 
 
-		[Test]
-		public void Paged_NoSpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Paged_NoSpecification(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			// no order by, so in theory this is useless. It will order on PK though
 			var page2 = film.Paged(currentPage: 2, pageSize: 30);
 			var pageItems = ((IEnumerable<dynamic>)page2.Items).ToList();
-			Assert.AreEqual(30, pageItems.Count);
-			Assert.AreEqual(1000, page2.TotalRecords);
+			Assert.Equal(30, pageItems.Count);
+			Assert.Equal(1000, page2.TotalRecords);
 		}
 
 
-		[Test]
-		public void Paged_OrderBySpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Paged_OrderBySpecification(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var page2 = film.Paged(orderBy: "rental_duration DESC", currentPage: 2, pageSize: 30);
 			var pageItems = ((IEnumerable<dynamic>)page2.Items).ToList();
-			Assert.AreEqual(30, pageItems.Count);
-			Assert.AreEqual(1000, page2.TotalRecords);
+			Assert.Equal(30, pageItems.Count);
+			Assert.Equal(1000, page2.TotalRecords);
 
 			int previous = int.MaxValue;
 			foreach(var r in pageItems)
 			{
 				int current = r.rental_duration;
-				Assert.IsTrue(current <= previous);
+				Assert.True(current <= previous);
 				previous = current;
 			}
 		}
 
 
-		[Test]
-		public void Paged_OrderBySpecification_ColumnsSpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Paged_OrderBySpecification_ColumnsSpecification(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var page2 = film.Paged(columns: "rental_duration, film_id", orderBy: "rental_duration DESC", currentPage: 2, pageSize: 30);
 			var pageItems = ((IEnumerable<dynamic>)page2.Items).ToList();
-			Assert.AreEqual(30, pageItems.Count);
-			Assert.AreEqual(1000, page2.TotalRecords);
+			Assert.Equal(30, pageItems.Count);
+			Assert.Equal(1000, page2.TotalRecords);
 			var firstRow = (IDictionary<string, object>)pageItems[0];
-			Assert.AreEqual(2, firstRow.Count);
+			Assert.Equal(2, firstRow.Count);
 			int previous = int.MaxValue;
 			foreach(var r in pageItems)
 			{
 				int current = r.rental_duration;
-				Assert.IsTrue(current <= previous);
+				Assert.True(current <= previous);
 				previous = current;
 			}
 		}
 
 
-		[Test]
-		public void Count_NoSpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Count_NoSpecification(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var total = film.Count();
-			Assert.AreEqual(1000, total);
+			Assert.Equal(1000, total);
 		}
 
 
-		[Test]
-		public void Count_WhereSpecification()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void Count_WhereSpecification(string ProviderName)
 		{
 			var film = new Film(ProviderName);
 			var total = film.Count(where: "WHERE rental_duration=@0", args: 5);
-			Assert.AreEqual(191, total);
+			Assert.Equal(191, total);
 		}
 
 
-		[Test]
-		public void DefaultValue()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void DefaultValue(string ProviderName)
 		{
 			var film = new Film(ProviderName, false);
 			var value = film.DefaultValue("last_update");
-			Assert.AreEqual(typeof(DateTime), value.GetType());
+			Assert.Equal(typeof(DateTime), value.GetType());
 		}
 
 
-		[Test]
-		public void IsValid_FilmIDCheck()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void IsValid_FilmIDCheck(string ProviderName)
 		{
 			dynamic film = new Film(ProviderName);
 			var toValidate = film.Find(film_id: 72);
 			// is invalid
-			Assert.IsFalse(film.IsValid(toValidate));
-			Assert.AreEqual(1, film.Errors.Count);
+			Assert.False(film.IsValid(toValidate));
+			Assert.Equal(1, film.Errors.Count);
 
 			toValidate = film.Find(film_id: 2);
 			// is valid
-			Assert.IsTrue(film.IsValid(toValidate));
-			Assert.AreEqual(0, film.Errors.Count);
+			Assert.True(film.IsValid(toValidate));
+			Assert.Equal(0, film.Errors.Count);
 		}
 
 
-		[Test]
-		public void PrimaryKey_Read_Check()
+		[Theory]
+		[MemberData(nameof(ProviderNames))]
+		public void PrimaryKey_Read_Check(string ProviderName)
 		{
 			dynamic film = new Film(ProviderName);
 			var toValidate = film.Find(film_id: 45);
 
-			Assert.IsTrue(film.HasPrimaryKey(toValidate));
+			Assert.True(film.HasPrimaryKey(toValidate));
 
 			var pkValue = film.GetPrimaryKey(toValidate);
-			Assert.AreEqual(45, pkValue);
+			Assert.Equal(45, pkValue);
 		}
 	}
 }

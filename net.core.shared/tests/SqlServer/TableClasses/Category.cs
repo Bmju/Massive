@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace Massive.Tests.TableClasses
+namespace Massive.Tests.SqlServer.TableClasses
 {
 	public class Category : DynamicModel
 	{
@@ -13,7 +13,7 @@ namespace Massive.Tests.TableClasses
 
 
 		public Category(bool includeSchema) :
-			base(TestConstants.WriteTestConnectionStringName, includeSchema ? "dbo.Categories" : "Categories", "CategoryID")
+			base(TestConstants.WriteTestConnection, includeSchema ? "dbo.Categories" : "Categories", "CategoryID")
 		{
 		}
 	}
