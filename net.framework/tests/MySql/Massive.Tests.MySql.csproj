@@ -90,12 +90,6 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\..\..\net.core.shared\src\Massive.MySql.cs">
-      <Link>Massive.MySql.cs</Link>
-    </Compile>
-    <Compile Include="..\..\..\net.core.shared\src\Massive.Shared.cs">
-      <Link>Massive.Shared.cs</Link>
-    </Compile>
     <Compile Include="..\..\..\net.core.shared\Tests\MySql\ReadTests.cs">
       <Link>ReadTests.cs</Link>
     </Compile>
@@ -131,6 +125,12 @@
   </ItemGroup>
   <ItemGroup>
     <Service Include="{82A7F48D-3B50-4B1E-B82E-3ADA8210C358}" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Massive.AllDbs.Async.4.5.csproj">
+      <Project>{6bfc879b-0c25-11e7-9c71-180373d5f10c}</Project>
+      <Name>Massive.AllDbs.Async.4.5</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
