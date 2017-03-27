@@ -212,6 +212,21 @@ namespace Massive
 	/// </summary>
 	public static partial class ObjectExtensions
 	{
+		private const string AddParamObsoleteMessage = "Extension method DbCommand.AddParam(value) is no longer supported; use DynamicModel.AddParam(DbCommand, value) instead.";
+
+		/// <summary>
+		/// Extension for adding single parameter. 
+		/// </summary>
+		/// <param name="cmd">The command to add the parameter to.</param>
+		/// <param name="value">The value to add as a parameter to the command.</param>
+		/// <remarks>Although this won't compile, it will link - which means that old code will throw a meaningful NotSupportedException.</remarks>
+		[Obsolete(AddParamObsoleteMessage, true)]
+		public static void AddParam(this DbCommand cmd, object value)
+		{
+			throw new NotSupportedException(AddParamObsoleteMessage);
+		}
+
+
 		/// <summary>
 		/// Yield return the next result set of this reader
 		/// </summary>
@@ -473,15 +488,63 @@ namespace Massive
 	/// <seealso cref="System.Dynamic.DynamicObject" />
 	public partial class DynamicModel : DynamicObject
 	{
-#region Members
+		#region Members
 		internal IDatabasePlugin _plugin;
 		private DbProviderFactory _factory;
 		private string _connectionString;
 		private IEnumerable<dynamic> _schema;
 		private string _primaryKeyFieldSequence;
-#endregion
+		#endregion
 
 
+		// disable deprecated warning (for IConnectionStringProvider)
+#pragma warning disable 0618
+		/// <summary>
+		/// Initializes a new instance of the <see cref="DynamicModel" /> class.
+		/// </summary>
+		/// <param name="connectionStringOrName">The connection string to use. In .NET Framework but not .NET Core may instead be the connection string name to load from the config file.
+		/// When passing the connection string itself, Massive supports the non-standard syntax of including ProviderName=... within the connection string.</param>
+		/// <param name="tableName">Name of the table to read the meta data for. Can be left empty, in which case the name of this type is used.</param>
+		/// <param name="primaryKeyField">The primary key field. Can be left empty, in which case 'ID' is used.</param>
+		/// <param name="descriptorField">The descriptor field, if the table is a lookup table. Descriptor field is the field containing the textual representation of the value
+		/// in primaryKeyField.</param>
+		/// <param name="primaryKeyFieldSequence">The primary key sequence to use. Specify the empty string if the PK isn't sequenced/identity. Is initialized by default with
+		/// the name specified in the constant DynamicModel.DefaultSequenceName.</param>
+		/// <param name="connectionStringProvider">The connection string provider to use. By default this is empty and the default provider is used, which works as described for the
+		/// connectionStringOrName parameter. (This optional connectionStringProvider parameter is deprecated: consider using the constructor which takes ConnectionProvider instead.)</param>
+		/// <remarks>The fact that this constructor takes the optional, deprecated IConnectionStringProvider parameeter is for backwards compatibility.</remarks>
+		public DynamicModel(string connectionStringOrName = "", string tableName = "", string primaryKeyField = "", string descriptorField = "",
+							string primaryKeyFieldSequence = "",
+							IConnectionStringProvider connectionStringProvider = null)
+		{
+			ConnectionProvider connectionProvider = null;
+			if(connectionStringProvider != null)
+			{
+				connectionProvider  = new ConnectionProviderForIConnectionStringProvider(connectionStringOrName, connectionStringProvider);
+				connectionStringOrName = null;
+			}
+			Init(connectionStringOrName, tableName, primaryKeyField, descriptorField, primaryKeyFieldSequence, connectionProvider);
+		}
+#pragma warning restore 0618
+
+
+		/// <summary>
+		/// Initializes a new instance of the <see cref="DynamicModel" /> class.
+		/// </summary>
+		/// <param name="connectionProvider">Optional connection provider, to support plugging in unknown providers.</param>
+		/// <param name="tableName">Name of the table to read the meta data for. Can be left empty, in which case the name of this type is used.</param>
+		/// <param name="primaryKeyField">The primary key field. Can be left empty, in which case 'ID' is used.</param>
+		/// <param name="descriptorField">The descriptor field, if the table is a lookup table. Descriptor field is the field containing the textual representation of the value
+		/// in primaryKeyField.</param>
+		/// <param name="primaryKeyFieldSequence">The primary key sequence to use. Specify the empty string if the PK isn't sequenced/identity. Is initialized by default with
+		/// the name specified in the constant DynamicModel.DefaultSequenceName.</param>
+		public DynamicModel(ConnectionProvider connectionProvider, string tableName = "", string primaryKeyField = "", string descriptorField = "",
+							string primaryKeyFieldSequence = "")
+		{
+			Init(null, tableName, primaryKeyField, descriptorField, primaryKeyFieldSequence, connectionProvider);
+		}
+
+		
 		/// <summary>
 		/// Initializes a new instance of the <see cref="DynamicModel" /> class.
 		/// </summary>
@@ -493,21 +556,25 @@ namespace Massive
 		/// in primaryKeyField.</param>
 		/// <param name="primaryKeyFieldSequence">The primary key sequence to use. Specify the empty string if the PK isn't sequenced/identity. Is initialized by default with
 		/// the name specified in the constant DynamicModel.DefaultSequenceName.</param>
-		public DynamicModel(string connectionStringOrName = "", string tableName = "", string primaryKeyField = "", string descriptorField = "",
-							string primaryKeyFieldSequence = "")
+		/// <param name="connectionProvider">Optional connection provider, to support plugging in unknown providers.</param>
+		internal void Init(string connectionStringOrName = "", string tableName = "", string primaryKeyField = "", string descriptorField = "",
+							string primaryKeyFieldSequence = "",
+							ConnectionProvider connectionProvider = null)
 		{
-			DynamicModelConnectionProvider connectionProvider;
-#if !COREFX
-			connectionProvider = new ConfigFileConnectionProvider(connectionStringOrName);
-			if (((dynamic)connectionProvider).GetConnectionStringSettings() == null)
-#endif
+			if(connectionProvider == null)
 			{
-				// use pure connection string provider
-				connectionProvider = new PureConnectionStringProvider(connectionStringOrName
 #if !COREFX
-					, true
+				connectionProvider = new ConfigFileConnectionProvider(connectionStringOrName);
+				if(((dynamic)connectionProvider).GetConnectionStringSettings() == null)
 #endif
-				);
+				{
+					// use pure connection string provider
+					connectionProvider = new PureConnectionStringProvider(connectionStringOrName
+#if !COREFX
+						, true
+#endif
+					);
+				}
 			}
 
 			_connectionString = connectionProvider.GetConnectionString();
@@ -536,7 +603,7 @@ namespace Massive
 			string database = GetMassiveDatabaseNameFromProviderName(providerName);
 			var pluginClassName = "Massive.Plugin." + database;
 			var type = Type.GetType(pluginClassName);
-			if (type == null)
+			if(type == null)
 			{
 				throw new NotImplementedException("Cannot find type " + pluginClassName);
 			}
@@ -2016,7 +2083,7 @@ namespace Massive
 			}
 		}
 
-#region Obsolete methods. Do not use
+		#region Obsolete methods. Do not use
 		/// <summary>
 		/// Builds a set of Insert and Update commands based on the passed-on objects. These objects can be POCOs, Anonymous, NameValueCollections, or Expandos. Objects
 		/// With a PK property (whatever PrimaryKeyField is set to) will be created at UPDATEs
@@ -2031,10 +2098,10 @@ namespace Massive
 			}
 			return commands;
 		}
-#endregion
+		#endregion
 
 
-#region Properties
+		#region Properties
 		/// <summary>
 		/// List out all the schema bits for use with ... whatever
 		/// </summary>
@@ -2122,7 +2189,29 @@ namespace Massive
 		/// which requires multiple large cursors open at once.
 		/// </remarks>
 		public int NpgsqlAutoDereferenceFetchSize { get; set; } = 10000;
-#endregion
+		#endregion
+	}
+
+
+	/// <summary>
+	/// Interface for specifying ado.net provider name and connection string. Used to create custom connection string/ado.net factory name providers 
+	/// for sources other than .config files, e.g. with usage in ASPNET5
+	/// </summary>
+	[Obsolete("Consider using abstract class interface ConnectionProvider instead.")]
+	public interface IConnectionStringProvider
+	{
+		/// <summary>
+		/// Gets the name of the provider which is the name of the DbProviderFactory specified in the connection string stored under the name specified.
+		/// </summary>
+		/// <param name="connectionStringName">Name of the connection string.</param>
+		/// <returns></returns>
+		string GetProviderName(string connectionStringName);
+		/// <summary>
+		/// Gets the connection string stored under the name specified
+		/// </summary>
+		/// <param name="connectionStringName">Name of the connection string.</param>
+		/// <returns></returns>
+		string GetConnectionString(string connectionStringName);
 	}
 
 
@@ -2141,13 +2230,13 @@ namespace Massive
 	///	   Massive does support, obviously!), or if something like a dependency injector or a profiler is wrapping the provider factory in another class."
 	///	 - Make the converter function be an (overridable!) method of this abstract class, as well :-)
 	/// </remarks>
-	internal abstract class DynamicModelConnectionProvider
+	public abstract class ConnectionProvider
 	{
 		/// <summary>
 		/// Return the actual factory object for the provider
 		/// </summary>
 		/// <returns></returns>
-		abstract internal DbProviderFactory GetProviderFactory();
+		abstract public DbProviderFactory GetProviderFactory();
 
 		/// <summary>
 		/// Gets the name of the provider.
@@ -2158,29 +2247,63 @@ namespace Massive
 		/// Although Massive can in theory infer this name by reflection from the class of the provider factory, that
 		/// breaks if the provider factory is wrapped for other reasons - e.g. by a profiling tool.
 		/// </remarks>
-		abstract internal string GetProviderName();
+		abstract public string GetProviderName();
 
 		/// <summary>
 		/// Gets the connection string stored under the name specified, or default connection string if no name sent
 		/// </summary>
 		/// <param name="connectionStringName">Name of the connection string.</param>
 		/// <returns></returns>
-		abstract internal string GetConnectionString();
+		abstract public string GetConnectionString();
 	}
+
+
+// disable deprecated warning (for IConnectionStringProvider)
+#pragma warning disable 0618
+	/// <summary>
+	/// 
+	/// </summary>
+	internal class ConnectionProviderForIConnectionStringProvider : ConnectionProvider
+	{
+		private string _connectionStringName;
+		private IConnectionStringProvider _connectionStringProvider;
+
+		public ConnectionProviderForIConnectionStringProvider(string connectionStringName, IConnectionStringProvider connectionStringProvider)
+		{
+			this._connectionStringName = connectionStringName;
+			this._connectionStringProvider = connectionStringProvider;
+		}
+
+		public override string GetConnectionString()
+		{
+			return _connectionStringProvider.GetConnectionString(_connectionStringName);
+		}
+
+		public override DbProviderFactory GetProviderFactory()
+		{
+			throw new NotImplementedException();
+		}
+
+		public override string GetProviderName()
+		{
+			return _connectionStringProvider.GetProviderName(_connectionStringName);
+		}
+	}
+#pragma warning restore 0618
 
 
 	/// <summary>
 	/// Default implementation of DynamicModelConnectionProvider which sorts out everything from a connection string with added property ProviderName=... .
 	/// </summary>
-	/// <seealso cref="Massive.DynamicModelConnectionProvider" />
-	internal class PureConnectionStringProvider : DynamicModelConnectionProvider
+	/// <seealso cref="Massive.ConnectionProvider" />
+	internal class PureConnectionStringProvider : ConnectionProvider
 	{
 		private readonly string InstanceFieldName = "Instance";
 
 		private string _providerName;
 		private string _connectionString;
 
-		public PureConnectionStringProvider(string ConnectionString, bool isFailoverFromConfigFile = false)
+		internal PureConnectionStringProvider(string ConnectionString, bool isFailoverFromConfigFile = false)
 		{
 			var extraMessage = isFailoverFromConfigFile ? " (and is not a valid connection string name)" : "";
 			try
@@ -2218,7 +2341,7 @@ namespace Massive
 		/// Return the actual factory object for the provider
 		/// </summary>
 		/// <returns></returns>
-		override internal DbProviderFactory GetProviderFactory()
+		override public DbProviderFactory GetProviderFactory()
 		{
 			string assemblyName = null;
 			// TO DO: Possibly we can just use .GetType(factoryClassName + ", " + assemblyName) here..., in which case that's what we should be returning just below.
@@ -2246,7 +2369,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="connectionStringName">Name of the connection string.</param>
 		/// <returns></returns>
-		override internal string GetProviderName()
+		override public string GetProviderName()
 		{
 			return _providerName;
 		}
@@ -2256,7 +2379,7 @@ namespace Massive
 		/// </summary>
 		/// <param name="connectionStringName">Name of the connection string.</param>
 		/// <returns></returns>
-		override internal string GetConnectionString()
+		override public string GetConnectionString()
 		{
 			return _connectionString;
 		}
@@ -2264,10 +2387,10 @@ namespace Massive
 
 #if !COREFX
 	/// <summary>
-	/// Default implementation of IConnectionStringProvider which uses config files for its source.
+	/// Default implementation of ConnectionProvider which uses config files for its source.
 	/// </summary>
-	/// <seealso cref="Massive.IConnectionStringProvider" />
-	internal class ConfigFileConnectionProvider : DynamicModelConnectionProvider
+	/// <seealso cref="Massive.ConnectionProvider" />
+	internal class ConfigFileConnectionProvider : ConnectionProvider
 	{
 		private string _connectionStringName;
 		private ConnectionStringSettings _connectionStringSettings;
@@ -2289,12 +2412,12 @@ namespace Massive
 		/// <returns></returns>
 		internal ConnectionStringSettings GetConnectionStringSettings()
 		{
-			if (!_calledOnce)
+			if(!_calledOnce)
 			{
 				if(_connectionStringName == null)
 				{
 					var machineConfigCount = System.Configuration.ConfigurationManager.OpenMachineConfiguration().ConnectionStrings.ConnectionStrings.Count;
-					if (ConfigurationManager.ConnectionStrings.Count <= machineConfigCount)
+					if(ConfigurationManager.ConnectionStrings.Count <= machineConfigCount)
 					{
 						throw new InvalidOperationException("No user-configured connection string available");
 					}
@@ -2315,7 +2438,7 @@ namespace Massive
 		/// which can be specified in addition to the ConnectionString="" attribute.
 		/// </summary>
 		/// <returns></returns>
-		override internal DbProviderFactory GetProviderFactory()
+		override public DbProviderFactory GetProviderFactory()
 		{
 			var providerName = GetProviderName();
 			return providerName == null ? null : DbProviderFactories.GetFactory(providerName);
@@ -2325,7 +2448,7 @@ namespace Massive
 		/// Gets the provider name which is stored in the config file along with the connection string
 		/// </summary>
 		/// <returns></returns>
-		override internal string GetProviderName()
+		override public string GetProviderName()
 		{
 			var providerName = GetConnectionStringSettings().ProviderName;
 			return !string.IsNullOrWhiteSpace(providerName) ? providerName : null;
@@ -2335,7 +2458,7 @@ namespace Massive
 		/// Gets the connection string
 		/// </summary>
 		/// <returns></returns>
-		override internal string GetConnectionString()
+		override public string GetConnectionString()
 		{
 			return GetConnectionStringSettings().ConnectionString;
 		}
@@ -2423,7 +2546,7 @@ namespace Massive
 		abstract internal object GetValue(DbParameter p);
 
 
-#region Constants
+		#region Constants
 		// Mandatory constants every DB has to define. 
 		/// <summary>
 		/// The default sequence name for initializing the pk sequence name value in the ctor. 
@@ -2433,7 +2556,7 @@ namespace Massive
 		/// Flag to signal whether the sequence retrieval call (if any) is executed before the insert query (true) or after (false). Not a const, to avoid warnings. 
 		/// </summary>
 		abstract internal bool _sequenceValueCallsBeforeMainInsert { get; }
-#endregion
+		#endregion
 
 
 		/// <summary>
@@ -2558,7 +2681,7 @@ namespace Massive
 											  int currentPage = 1);
 
 
-#region Properties
+		#region Properties
 		/// <summary>
 		/// Gets the table schema query to use to obtain meta-data for a given table and schema
 		/// </summary>
@@ -2573,6 +2696,6 @@ namespace Massive
 		/// What the plugin is plugged into
 		/// </summary>
 		abstract internal DynamicModel _dynamicModel { get; set; }
-#endregion
+		#endregion
 	}
 }
