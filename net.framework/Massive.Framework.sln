@@ -13,7 +13,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Massive.Tests.Sqlite", "tes
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Massive.Tests.MySql", "tests\MySql\Massive.Tests.MySql.csproj", "{67ED2122-3504-4C3C-ADE1-A61F48C6AFB5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Massive.AllDbs", "src\Massive.AllDbs.csproj", "{6BFC879B-0C25-11E7-9C71-180373D5F10C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Massive.AllDbs.Async.4.5", "src\Massive.AllDbs.Async.4.5.csproj", "{6BFC879B-0C25-11E7-9C71-180373D5F10C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Massive.AllDbs.NoAsync.4.0", "src\Massive.AllDbs.NoAsync.4.0.csproj", "{DA5E2393-1300-11E7-82C6-180373D5F10C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -71,6 +73,14 @@ Global
 		{6BFC879B-0C25-11E7-9C71-180373D5F10C}.Release|Any CPU.Build.0 = Release|Any CPU
 		{6BFC879B-0C25-11E7-9C71-180373D5F10C}.Release|x64.ActiveCfg = Release|Any CPU
 		{6BFC879B-0C25-11E7-9C71-180373D5F10C}.Release|x64.Build.0 = Release|Any CPU
+		{DA5E2393-1300-11E7-82C6-180373D5F10C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DA5E2393-1300-11E7-82C6-180373D5F10C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DA5E2393-1300-11E7-82C6-180373D5F10C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{DA5E2393-1300-11E7-82C6-180373D5F10C}.Debug|x64.Build.0 = Debug|Any CPU
+		{DA5E2393-1300-11E7-82C6-180373D5F10C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DA5E2393-1300-11E7-82C6-180373D5F10C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DA5E2393-1300-11E7-82C6-180373D5F10C}.Release|x64.ActiveCfg = Release|Any CPU
+		{DA5E2393-1300-11E7-82C6-180373D5F10C}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

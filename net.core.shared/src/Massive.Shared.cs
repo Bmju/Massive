@@ -246,7 +246,11 @@ namespace Massive
 			{
 				return Activator.CreateInstance(underlying);
 			}
+#if COREFX
 			if(type.GetTypeInfo().IsValueType)
+#else
+			if(type.IsValueType)
+#endif
 			{
 				return Activator.CreateInstance(type);
 			}
