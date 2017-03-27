@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 [assembly: AssemblyTitle("Massive")]
+[assembly: AssemblyDescription("Micro ORM to query and manage data in mutliple supported databases")]
 [assembly: AssemblyConfiguration(".NET 4.5+")]
 [assembly: AssemblyProduct("Massive")]
 [assembly: AssemblyCopyright("Copyright © 2009-2017 various contributors")]
