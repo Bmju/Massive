@@ -565,23 +565,19 @@ namespace Massive
 			{
 #if !COREFX
 				connectionProvider = new ConfigFileConnectionProvider(connectionStringOrName);
-				if(((dynamic)connectionProvider).GetConnectionStringSettings() == null)
+				if(connectionProvider.connectionString == null)
 #endif
 				{
-					// use pure connection string provider
-					connectionProvider = new PureConnectionStringProvider(connectionStringOrName
-#if !COREFX
-						, true
-#endif
-					);
+					// use pure connection string provider (always on Core, or if it wasn't a valid connection string name on Framework)
+					connectionProvider = new PureConnectionStringProvider(connectionStringOrName);
 				}
 			}
 
-			_connectionString = connectionProvider.GetConnectionString();
-			_factory = connectionProvider.GetProviderFactory();
-			// we don't infer the provider name from the factory class type in case the factory is wrapped by other tools
-			var providerName = connectionProvider.GetProviderName();
-			_plugin = GetPlugin(providerName);
+			_connectionString = connectionProvider.connectionString;
+			_factory = connectionProvider.providerFactory;
+			// NOTE: we can't try to infer the provider name from the factory class type, in case the factory is wrapped by other tools
+			SupportedDatabase supportedDatabase = connectionProvider.supportedDatabase;
+			_plugin = GetPlugin(supportedDatabase);
 
 			this.TableName = string.IsNullOrWhiteSpace(tableName) ? this.GetType().Name : tableName;
 			ProcessTableName();
@@ -598,10 +594,9 @@ namespace Massive
 		/// </summary>
 		/// <param name="providerName">Provider name.</param>
 		/// <returns></returns>
-		private IDatabasePlugin GetPlugin(string providerName)
+		private IDatabasePlugin GetPlugin(SupportedDatabase supportedDatabase)
 		{
-			string database = GetMassiveDatabaseNameFromProviderName(providerName);
-			var pluginClassName = "Massive.Plugin." + database;
+			var pluginClassName = "Massive.Plugin." + supportedDatabase.ToString();
 			var type = Type.GetType(pluginClassName);
 			if(type == null)
 			{
@@ -610,85 +605,6 @@ namespace Massive
 			var plugin = (IDatabasePlugin)Activator.CreateInstance(type, false);
 			plugin._dynamicModel = this;
 			return plugin;
-		}
-
-
-		/// <summary>
-		/// Get Massive internal database name based on known provider name.
-		/// </summary>
-		/// <param name="providerName">Provider name.</param>
-		/// <returns></returns>
-		/// TO DO: Combine these two, and return a little MassiveDatabaseInfo object from ProviderName
-		private static string GetMassiveDatabaseNameFromProviderName(string providerName)
-		{
-			switch(providerName.ToLowerInvariant())
-			{
-				case "system.data.sqlclient":
-					return "SqlServer";
-
-				case "oracle.manageddataaccess.client":
-					return "Oracle";
-				case "oracle.dataaccess.client":
-					return "Oracle";
-
-				case "npgsql":
-					return "PostgreSql";
-
-				case "mysql.data.mysqlclient":
-					return "MySql";
-				case "devart.data.mysql":
-					return "MySql";
-
-				case "system.data.sqlite":
-				case "microsoft.data.sqlite":
-					return "Sqlite";
-
-				default:
-					throw new InvalidOperationException("Unknown database provider: " + providerName);
-			}
-		}
-
-
-		/// <summary>
-		/// Get factory class name based on known provider name.
-		/// </summary>
-		/// <param name="providerName">Provider name.</param>
-		/// <returns></returns>
-		internal static string GetDbProviderFactoryClassNameFromProviderName(string providerName, ref string assemblyName)
-		{
-			switch(providerName.ToLowerInvariant())
-			{
-				case "system.data.sqlclient":
-					return "System.Data.SqlClient.SqlClientFactory";
-
-				case "oracle.manageddataaccess.client":
-					return "Oracle.ManagedDataAccess.Client.OracleClientFactory";
-
-				case "oracle.dataaccess.client":
-					return "Oracle.DataAccess.Client.OracleClientFactory";
-
-				case "npgsql":
-					return "Npgsql.NpgsqlFactory";
-
-				case "mysql.data.mysqlclient":
-#if COREFX
-					//assemblyName = "MySql.Data.Core"; // older/beta version
-					assemblyName = "MySql.Data";
-#endif
-					return "MySql.Data.MySqlClient.MySqlClientFactory";
-
-				case "devart.data.mysql":
-					return "Devart.Data.MySql.MySqlProviderFactory";
-
-				case "system.data.sqlite":
-					return "System.Data.SQLite.SQLiteFactory";
-
-				case "microsoft.data.sqlite":
-					return "Microsoft.Data.Sqlite.SqliteFactory";
-
-				default:
-					throw new InvalidOperationException("Unknown database provider: " + providerName);
-			}
 		}
 
 
@@ -2194,6 +2110,96 @@ namespace Massive
 
 
 	/// <summary>
+	/// Massive equivalent of System.Data.Common.DbProviderFactories (which does not exist in .NET Core): a registry of supported providers
+	/// for provider names known to Massive.
+	/// To use providers not yet known to Massive, just pass your own implementation of ConnectionProvider to the DynamicModel constructor.
+	/// </summary>
+	/// <remarks>
+	/// This factory is always used by PureConnectionStringProvider (on .NET Core and on .NET Framework).
+	/// The old System.Data.Common.DbProviderFactories is used by ConfigFileConnectionProvider (.NET Framework only).
+	/// So: if you pass a pure connection string to Massive then it won't look for providers registered in the traditional way, not even on .NET Framework;
+	/// however if you pass a connection string name (the old approach, available on .NET Framework only) then everything will work as it used to.
+	/// </remarks>
+	public class DynamicModelProviderFactories
+	{
+		private const string INSTANCE_FIELD_NAME = "Instance";
+
+		/// <summary>
+		/// Return the factory object for the ADO.NET provider, for provider names known to Massive.
+		/// </summary>
+		/// <param name="providerName">The provider name</param>
+		/// <returns></returns>
+		public static DbProviderFactory GetFactory(string providerName)
+		{
+			string assemblyName = null;
+			var factoryClass = GetProviderFactoryClass(providerName);
+			string[] elements = factoryClass.Split(',');
+			string factoryClassName = elements[0];
+			if(elements.Length > 1)
+			{
+				assemblyName = elements[1];
+			}
+			else
+			{
+				assemblyName = assemblyName ?? factoryClassName.Substring(0, factoryClassName.LastIndexOf("."));
+			}
+			var assemblyNameClass = new AssemblyName(assemblyName);
+			Type type = Assembly.Load(assemblyNameClass).GetType(factoryClassName);
+			var f = type.GetField(INSTANCE_FIELD_NAME);
+			if(f == null)
+			{
+				throw new NotImplementedException("No " + INSTANCE_FIELD_NAME + " field/property found in intended DbProviderFactory class '" + factoryClassName + "'");
+			}
+			return (DbProviderFactory)f.GetValue(null);
+		}
+
+
+		/// <summary>
+		/// Get factory class name based on known provider name.
+		/// </summary>
+		/// <param name="providerName">Provider name</param>
+		/// <returns>"fully.qualified.provider.class, assembly.name", if assembly.name is ommitted then everything up to the class name is used instead</returns>
+		private static string GetProviderFactoryClass(string providerName)
+		{
+			switch(providerName.ToLowerInvariant())
+			{
+				case "system.data.sqlclient":
+					return "System.Data.SqlClient.SqlClientFactory";
+
+				case "oracle.manageddataaccess.client":
+					return "Oracle.ManagedDataAccess.Client.OracleClientFactory";
+
+				case "oracle.dataaccess.client":
+					return "Oracle.DataAccess.Client.OracleClientFactory";
+
+				case "npgsql":
+					return "Npgsql.NpgsqlFactory";
+
+				case "mysql.data.mysqlclient":
+#if COREFX
+					//return "MySql.Data.MySqlClient.MySqlClientFactory, MySql.Data.Core"; // older/beta version
+					return "MySql.Data.MySqlClient.MySqlClientFactory, MySql.Data";
+#else
+					return "MySql.Data.MySqlClient.MySqlClientFactory, MySql.Data";
+#endif
+
+				case "devart.data.mysql":
+					return "Devart.Data.MySql.MySqlProviderFactory";
+
+				case "system.data.sqlite":
+					return "System.Data.SQLite.SQLiteFactory";
+
+				case "microsoft.data.sqlite":
+					return "Microsoft.Data.Sqlite.SqliteFactory";
+
+				default:
+					throw new InvalidOperationException("Unknown database provider: " + providerName);
+			}
+		}
+	}
+
+
+	/// <summary>
 	/// Interface for specifying ado.net provider name and connection string. Used to create custom connection string/ado.net factory name providers 
 	/// for sources other than .config files, e.g. with usage in ASPNET5
 	/// </summary>
@@ -2216,96 +2222,128 @@ namespace Massive
 
 
 	/// <summary>
-	/// Abstract class interface for specifying ADO.NET provider factory and connection string.
+	/// Enumeration of known databases in Massive.
 	/// </summary>
-	/// <remarks>
-	/// TO DO: Okay, this needs to return:
-	///  - DbProviderFactory - always, MUST be returned for an unknown provider - and is not the same for the same database
-	///  - ConnectionString - always, obviously
-	///  - Massive.SupportedDatabase.Oracle, .SqlServer, .MySql, .Sqlite, .Postgresql - this is better than the provider name, because it
-	///	   doesn't tie us to known ADO.NET providers - however... if this is an abstract class, then we can define a version which infers
-	///	   the supported database from the provider factory!
-	///	   "In many cases, you will not need to override this method. The default implementation will work correctly for all the DbProviderFactory
-	///	   classes which Massive already knows about. You will need to override this if you are using a new ADO.NET provider (but only for a database which
-	///	   Massive does support, obviously!), or if something like a dependency injector or a profiler is wrapping the provider factory in another class."
-	///	 - Make the converter function be an (overridable!) method of this abstract class, as well :-)
-	/// </remarks>
-	public abstract class ConnectionProvider
+	/// <remarks>Add to this if supporting a new db, but don't re-order</remarks>
+	public enum SupportedDatabase
 	{
-		/// <summary>
-		/// Return the actual factory object for the provider
-		/// </summary>
-		/// <returns></returns>
-		abstract public DbProviderFactory GetProviderFactory();
-
-		/// <summary>
-		/// Gets the name of the provider.
-		/// </summary>
-		/// <param name="connectionStringName">Name of the connection string.</param>
-		/// <returns></returns>
-		/// <remarks>
-		/// Although Massive can in theory infer this name by reflection from the class of the provider factory, that
-		/// breaks if the provider factory is wrapped for other reasons - e.g. by a profiling tool.
-		/// </remarks>
-		abstract public string GetProviderName();
-
-		/// <summary>
-		/// Gets the connection string stored under the name specified, or default connection string if no name sent
-		/// </summary>
-		/// <param name="connectionStringName">Name of the connection string.</param>
-		/// <returns></returns>
-		abstract public string GetConnectionString();
+		MySql,
+		Oracle,
+		PostgreSql,
+		Sqlite,
+		SqlServer
 	}
 
 
-// disable deprecated warning (for IConnectionStringProvider)
+	/// <summary>
+	/// Abstract class interface for specifying ADO.NET provider factory and connection string.
+	/// Your implementation of this should have a constructor which sets the three public properties.
+	/// </summary>
+	public abstract class ConnectionProvider
+	{
+		/// <summary>
+		/// The DbProviderFactory instance to use; may be from a previously unknown provider, as long as the SQL required matches that of a known database.
+		/// </summary>
+		public DbProviderFactory providerFactory { get; protected set; }
+
+		/// <summary>
+		/// Specify which database syntax Massive should use.
+		/// </summary>
+		public SupportedDatabase supportedDatabase { get; protected set; }
+
+		/// <summary>
+		/// The connection string (as returned here, must be in native DB format with no extras).
+		/// </summary>
+		public string connectionString { get; protected set; }
+
+		#region Utility methods
+		/// <summary>
+		/// Get Massive internal database name based on known provider name.
+		/// </summary>
+		/// <param name="providerName">Provider name.</param>
+		/// <returns></returns>
+		public static SupportedDatabase GetSupportedDatabaseFromProviderName(string providerName)
+		{
+			switch(providerName.ToLowerInvariant())
+			{
+				case "system.data.sqlclient":
+					return SupportedDatabase.SqlServer;
+
+				case "oracle.manageddataaccess.client":
+					return SupportedDatabase.Oracle;
+				case "oracle.dataaccess.client":
+					return SupportedDatabase.Oracle;
+
+				case "npgsql":
+					return SupportedDatabase.PostgreSql;
+
+				case "mysql.data.mysqlclient":
+					return SupportedDatabase.MySql;
+				case "devart.data.mysql":
+					return SupportedDatabase.MySql;
+
+				case "system.data.sqlite":
+				case "microsoft.data.sqlite":
+					return SupportedDatabase.Sqlite;
+
+				default:
+					throw new InvalidOperationException("Unknown database provider: " + providerName);
+			}
+		}
+		#endregion
+	}
+
+
+	// disable deprecated warning (for IConnectionStringProvider)
 #pragma warning disable 0618
 	/// <summary>
-	/// 
+	/// New ConnectionProvider wrapper for old IConnectionStringProvider.
 	/// </summary>
 	internal class ConnectionProviderForIConnectionStringProvider : ConnectionProvider
 	{
-		private string _connectionStringName;
-		private IConnectionStringProvider _connectionStringProvider;
-
-		public ConnectionProviderForIConnectionStringProvider(string connectionStringName, IConnectionStringProvider connectionStringProvider)
+		/// <summary>
+		/// ConnectionProviderForIConnectionStringProvider constructor.
+		/// This will always use System.Data.Common.DbProviderFactories on .NET Framework,
+		/// and always use DynamicModelProviderFactories on .NET Core.
+		/// </summary>
+		/// <param name="connectionStringName">The connection string name (only, not actual connection string).</param>
+		/// <param name="connectionStringProvider">The old-style IConnectionStringProvider object.</param>
+		internal ConnectionProviderForIConnectionStringProvider(string connectionStringName, IConnectionStringProvider connectionStringProvider)
 		{
-			this._connectionStringName = connectionStringName;
-			this._connectionStringProvider = connectionStringProvider;
-		}
-
-		public override string GetConnectionString()
-		{
-			return _connectionStringProvider.GetConnectionString(_connectionStringName);
-		}
-
-		public override DbProviderFactory GetProviderFactory()
-		{
-			throw new NotImplementedException();
-		}
-
-		public override string GetProviderName()
-		{
-			return _connectionStringProvider.GetProviderName(_connectionStringName);
+			connectionString = connectionStringProvider.GetConnectionString(connectionStringName);
+			string providerName = connectionStringProvider.GetProviderName(connectionStringName);
+			if (providerName != null)
+			{
+				supportedDatabase = GetSupportedDatabaseFromProviderName(providerName);
+#if COREFX
+				providerFactory = DynamicModelProviderFactories.GetFactory(providerName);
+#else
+				providerFactory = DbProviderFactories.GetFactory(providerName);
+#endif
+			}
 		}
 	}
 #pragma warning restore 0618
 
 
 	/// <summary>
-	/// Default implementation of DynamicModelConnectionProvider which sorts out everything from a connection string with added property ProviderName=... .
+	/// Implementation of ConnectionProvider which sorts out everything from a connection string with added property ProviderName=... .
 	/// </summary>
 	/// <seealso cref="Massive.ConnectionProvider" />
 	internal class PureConnectionStringProvider : ConnectionProvider
 	{
-		private readonly string InstanceFieldName = "Instance";
-
-		private string _providerName;
-		private string _connectionString;
-
-		internal PureConnectionStringProvider(string ConnectionString, bool isFailoverFromConfigFile = false)
+		/// <summary>
+		/// PureConnectionStringProvider constructor.
+		/// </summary>
+		/// <param name="ConnectionString">The connection string; this provider requires the non-standard syntax of having ProviderName=... included in the connection string itself.</param>
+		/// <param name="isFailoverFromConfigFile">Modifies the exception message</param>
+		internal PureConnectionStringProvider(string ConnectionString)
 		{
-			var extraMessage = isFailoverFromConfigFile ? " (and is not a valid connection string name)" : "";
+			string _providerName = null;
+			var extraMessage = "";
+#if !COREFX
+			extraMessage = " (and is not a valid connection string name)";
+#endif
 			try
 			{
 				StringBuilder connectionString = new StringBuilder();
@@ -2327,61 +2365,16 @@ namespace Massive
 				}
 				if(_providerName == null)
 				{
-					throw new InvalidOperationException("Cannot find ProviderName=... in connection string passed in to DynamicModel" + extraMessage);
+					throw new InvalidOperationException("Cannot find ProviderName=... in connection string passed to DynamicModel" + extraMessage);
 				}
-				_connectionString = connectionString.ToString();
+				supportedDatabase = GetSupportedDatabaseFromProviderName(_providerName);
+				providerFactory = DynamicModelProviderFactories.GetFactory(_providerName);
+				this.connectionString = connectionString.ToString();
 			}
 			catch
 			{
 				throw new InvalidOperationException("Cannot parse as connection string \"" + ConnectionString + "\"" + extraMessage);
 			}
-		}
-
-		/// <summary>
-		/// Return the actual factory object for the provider
-		/// </summary>
-		/// <returns></returns>
-		override public DbProviderFactory GetProviderFactory()
-		{
-			string assemblyName = null;
-			// TO DO: Possibly we can just use .GetType(factoryClassName + ", " + assemblyName) here..., in which case that's what we should be returning just below.
-			var factoryClassName = DynamicModel.GetDbProviderFactoryClassNameFromProviderName(_providerName, ref assemblyName);
-			assemblyName = assemblyName ?? factoryClassName.Substring(0, factoryClassName.LastIndexOf("."));
-			var assemblyNameClass = new AssemblyName(assemblyName);
-			Type type = Assembly.Load(assemblyNameClass).GetType(factoryClassName);
-			// TO DO: Just use .GetField("Instance")!
-			try
-			{
-				foreach(var f in type.GetFields())
-				{
-					if(f.Name == InstanceFieldName)
-					{
-						return (DbProviderFactory)f.GetValue(null);
-					}
-				}
-			}
-			catch { }
-			throw new NotImplementedException("No " + InstanceFieldName + " field/property found in intended DbProviderFactory class '" + factoryClassName + "'");
-		}
-
-		/// <summary>
-		/// Gets the name of the provider which is the name of the DbProviderFactory specified in the connection string stored under the name specified.
-		/// </summary>
-		/// <param name="connectionStringName">Name of the connection string.</param>
-		/// <returns></returns>
-		override public string GetProviderName()
-		{
-			return _providerName;
-		}
-
-		/// <summary>
-		/// Gets the connection string stored under the name specified
-		/// </summary>
-		/// <param name="connectionStringName">Name of the connection string.</param>
-		/// <returns></returns>
-		override public string GetConnectionString()
-		{
-			return _connectionString;
 		}
 	}
 
@@ -2392,17 +2385,23 @@ namespace Massive
 	/// <seealso cref="Massive.ConnectionProvider" />
 	internal class ConfigFileConnectionProvider : ConnectionProvider
 	{
-		private string _connectionStringName;
-		private ConnectionStringSettings _connectionStringSettings;
-		private bool _calledOnce;
-
 		/// <summary>
-		/// Constructor
+		/// ConfigFileConnectionProvider constructor.
 		/// </summary>
-		/// <param name="ConnectionStringName">Connection string name; may be null to load by default the first connection string in the user config file.</param>
-		internal ConfigFileConnectionProvider(string ConnectionStringName = null)
+		/// <param name="ConnectionStringName">Connection string name; may be null to load the first connection string in the user config file.</param>
+		internal ConfigFileConnectionProvider(string connectionStringName = null)
 		{
-			_connectionStringName = ConnectionStringName;
+			ConnectionStringSettings connectionStringSettings = GetConnectionStringSettings(connectionStringName);
+			if (connectionStringSettings != null)
+			{
+				connectionString = connectionStringSettings.ConnectionString;
+				string providerName = connectionStringSettings.ProviderName;
+				if(providerName != null)
+				{
+					supportedDatabase = GetSupportedDatabaseFromProviderName(providerName);
+					providerFactory = DbProviderFactories.GetFactory(providerName);
+				}
+			}
 		}
 
 		/// <summary>
@@ -2410,57 +2409,26 @@ namespace Massive
 		/// </summary>
 		/// <param name="connectionStringName">Name of the connection string.</param>
 		/// <returns></returns>
-		internal ConnectionStringSettings GetConnectionStringSettings()
+		private ConnectionStringSettings GetConnectionStringSettings(string connectionStringName)
 		{
-			if(!_calledOnce)
+			ConnectionStringSettings connectionStringSettings = null;
+			if(connectionStringName == null)
 			{
-				if(_connectionStringName == null)
+				// This now works ;)
+				// http://stackoverflow.com/a/4681754/
+				var machineConfigCount = System.Configuration.ConfigurationManager.OpenMachineConfiguration().ConnectionStrings.ConnectionStrings.Count;
+				if(ConfigurationManager.ConnectionStrings.Count <= machineConfigCount)
 				{
-					var machineConfigCount = System.Configuration.ConfigurationManager.OpenMachineConfiguration().ConnectionStrings.ConnectionStrings.Count;
-					if(ConfigurationManager.ConnectionStrings.Count <= machineConfigCount)
-					{
-						throw new InvalidOperationException("No user-configured connection string available");
-					}
-					_connectionStringSettings = ConfigurationManager.ConnectionStrings[machineConfigCount];
+					throw new InvalidOperationException("No user-configured connection string available");
 				}
-				else
-				{
-					// may be null, if there is no such connection string name; Massive will switch to using the pure connection string provider.
-					_connectionStringSettings = ConfigurationManager.ConnectionStrings[_connectionStringName];
-				}
-				_calledOnce = true;
+				connectionStringSettings = ConfigurationManager.ConnectionStrings[machineConfigCount];
 			}
-			return _connectionStringSettings;
-		}
-
-		/// <summary>
-		/// Return the actual factory object for the provider, based on the additional ProviderName=... attribute
-		/// which can be specified in addition to the ConnectionString="" attribute.
-		/// </summary>
-		/// <returns></returns>
-		override public DbProviderFactory GetProviderFactory()
-		{
-			var providerName = GetProviderName();
-			return providerName == null ? null : DbProviderFactories.GetFactory(providerName);
-		}
-
-		/// <summary>
-		/// Gets the provider name which is stored in the config file along with the connection string
-		/// </summary>
-		/// <returns></returns>
-		override public string GetProviderName()
-		{
-			var providerName = GetConnectionStringSettings().ProviderName;
-			return !string.IsNullOrWhiteSpace(providerName) ? providerName : null;
-		}
-
-		/// <summary>
-		/// Gets the connection string
-		/// </summary>
-		/// <returns></returns>
-		override public string GetConnectionString()
-		{
-			return GetConnectionStringSettings().ConnectionString;
+			else
+			{
+				// may be null if there is no such connection string name; Massive will switch to using the pure connection string provider
+				connectionStringSettings = ConfigurationManager.ConnectionStrings[connectionStringName];
+			}
+			return connectionStringSettings;
 		}
 	}
 #endif
@@ -2546,7 +2514,7 @@ namespace Massive
 		abstract internal object GetValue(DbParameter p);
 
 
-		#region Constants
+#region Constants
 		// Mandatory constants every DB has to define. 
 		/// <summary>
 		/// The default sequence name for initializing the pk sequence name value in the ctor. 
@@ -2556,7 +2524,7 @@ namespace Massive
 		/// Flag to signal whether the sequence retrieval call (if any) is executed before the insert query (true) or after (false). Not a const, to avoid warnings. 
 		/// </summary>
 		abstract internal bool _sequenceValueCallsBeforeMainInsert { get; }
-		#endregion
+#endregion
 
 
 		/// <summary>
@@ -2681,7 +2649,7 @@ namespace Massive
 											  int currentPage = 1);
 
 
-		#region Properties
+#region Properties
 		/// <summary>
 		/// Gets the table schema query to use to obtain meta-data for a given table and schema
 		/// </summary>
@@ -2696,6 +2664,6 @@ namespace Massive
 		/// What the plugin is plugged into
 		/// </summary>
 		abstract internal DynamicModel _dynamicModel { get; set; }
-		#endregion
+#endregion
 	}
 }
