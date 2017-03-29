@@ -1,3 +1,15 @@
+## ** Disclaimer **
+This is a beta version fork of https://github.com/FransBouma/Massive ; the changes in here work, and run, with extensive tests, and you're welcome to take it and use it - but a lot of it's not in the main branch (even though *some* is).
+
+Everything in this README about 'Version 3 of Massive' is about this fork, and it's 100% NOT an official version of release of Massive. In fact, the whole 'Version 3' thing needs rethinking, sooner rather than later.
+
+For now, it's more just me playing around with what I'd like Massive to be.
+
+Again though, it works, it's got loads of tests, and you can drop it into an existing Massive codebase and it will do exactly what Massive used to do!
+
+But it's not Massive. You have been warned.
+
+
 # Welcome to Massive! A small, happy MicroORM (and general purpose .NET data access wrapper) which will love you forever!
 
 ## New in 3.0
@@ -10,7 +22,7 @@
 * Multiple result sets
 * Simultaneous access to more then one database provider, if you need it
 
-Plus... it's still Massive! If you already use Massive then your existing code will compile and run just as before. .NET Core support is the only thing here that required actually changing the API (rather than just carefully extending it), and even then the changes are almost entirely non-breaking for existing users (unless you've ever called DbParameter.AddParam(value) directly yourself... but you haven't, because that's exactly what Massive does for you ;) ).
+Plus... it's still 100% compatible with Massive! If you already use Massive then your existing code will compile and run just as before. .NET Core support is the only thing here that required actually changing the API (rather than just carefully extending it), and even then the changes are almost entirely non-breaking for existing users (unless you've ever called DbParameter.AddParam(value) directly yourself... but you haven't, because that's exactly what Massive does for you ;) ).
 
 ## What is Massive?
 
@@ -509,7 +521,7 @@ This is relevant here, because up to and including v2.0 Massive has advertised i
 
 You can still download the Massive source files; and as of right now, you still have to. And of course you can change them: it's open source! But realistically, a lot of people using Massive don't want to change it, they just want it to work.
 
-#### The Future 
+#### One Possible Future 
 
 Downloading source files for most users needs to be a temporary state of affairs. As @FransBouma rightly pointed out a while ago [it's past time](https://github.com/FransBouma/Massive/issues/248) that Massive had automatically generated downloads, and this is next on the to-do list. To be honest, it's past time that Massive was on NuGet given that it now supports .NET Core, and I think this is the way to go. Stay posted.
 
