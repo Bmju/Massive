@@ -2344,9 +2344,9 @@ namespace Massive
 #if !COREFX
 			extraMessage = " (and is not a valid connection string name)";
 #endif
+			StringBuilder connectionString = new StringBuilder();
 			try
 			{
-				StringBuilder connectionString = new StringBuilder();
 				foreach(var configPair in ConnectionString.Split(';'))
 				{
 					if(!string.IsNullOrEmpty(configPair))
@@ -2363,18 +2363,18 @@ namespace Massive
 						}
 					}
 				}
-				if(_providerName == null)
-				{
-					throw new InvalidOperationException("Cannot find ProviderName=... in connection string passed to DynamicModel" + extraMessage);
-				}
-				supportedDatabase = GetSupportedDatabaseFromProviderName(_providerName);
-				providerFactory = DynamicModelProviderFactories.GetFactory(_providerName);
-				this.connectionString = connectionString.ToString();
 			}
-			catch
+			catch(Exception ex)
 			{
-				throw new InvalidOperationException("Cannot parse as connection string \"" + ConnectionString + "\"" + extraMessage);
+				throw new InvalidOperationException("Cannot parse as connection string \"" + ConnectionString + "\"" + extraMessage, ex);
 			}
+			if(_providerName == null)
+			{
+				throw new InvalidOperationException("Cannot find ProviderName=... in connection string passed to DynamicModel" + extraMessage);
+			}
+			supportedDatabase = GetSupportedDatabaseFromProviderName(_providerName);
+			providerFactory = DynamicModelProviderFactories.GetFactory(_providerName);
+			this.connectionString = connectionString.ToString();
 		}
 	}
 
