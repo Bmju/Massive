@@ -488,7 +488,7 @@ Apart from one issue, `.AddParam()` (which you aren't using, because Massive doe
 |Oracle.ManagedDataAccess.Client|YES|There is no .NET Core version of this provider yet [[ref]](www.oracle.com/technetwork/topics/dotnet/tech-info/odpnet-dotnet-core-sod-3628981.pdf)|
 |Oracle.DataAccess.Client|YES|There will never be a .NET Core version of this provider [[ref]](www.oracle.com/technetwork/topics/dotnet/tech-info/odpnet-dotnet-core-sod-3628981.pdf)|
 |Npgsql|YES|YES|
-|MySql.Data.MySqlClient|YES|YES|
+|MySql.Data.MySqlClient|YES|YES (driver at pre-release on NuGet, but passing all tests in Massive)|
 |Devart.Data.MySql|YES|There is no .NET Core version of this provider yet|
 |System.Data.SQLite|YES|N/A|
 |Microsoft.Data.Sqlite|N/A|YES|
