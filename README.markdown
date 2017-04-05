@@ -1,7 +1,7 @@
 ## ** Disclaimer **
 This is a beta version fork of https://github.com/FransBouma/Massive ; the changes in here work, and run, with extensive tests, and you're welcome to take it and use it - but a lot of it's not in the main branch (even though *some* is).
 
-Everything in this README about 'Version 3 of Massive' is about this fork, and it's 100% NOT an official version of release of Massive. In fact, the whole 'Version 3' thing needs rethinking, sooner rather than later.
+Everything in this README about 'Version 3 of Massive' is about this fork, and it's 100% NOT an official version or release of Massive. In fact, the whole 'Version 3' thing needs rethinking, sooner rather than later.
 
 For now, it's more just me playing around with what I'd like Massive to be.
 
